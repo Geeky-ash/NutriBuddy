@@ -147,7 +147,7 @@ export const CameraViewfinder: React.FC<CameraViewfinderProps> = ({
     if (cameraRef.current) {
       try {
         const photo = await cameraRef.current.takePictureAsync({
-          quality: 0.85,
+          quality: 0.65,
           base64: true,
           skipProcessing: false,
         });
@@ -198,168 +198,175 @@ export const CameraViewfinder: React.FC<CameraViewfinderProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Edge-to-edge Camera */}
-      <CameraView
-        ref={cameraRef}
-        style={StyleSheet.absoluteFillObject}
-        facing={facing}
-        enableTorch={torchEnabled}
-      >
-        {/* Top Control Bar with Segmented Toggle */}
-        <View style={styles.topBar}>
-          <TouchableOpacity
-            style={styles.iconCircle}
-            onPress={handleToggleTorch}
-            activeOpacity={0.7}
-          >
-            {torchEnabled ? (
-              <Zap size={20} color={colors.brand.amber} />
-            ) : (
-              <ZapOff size={20} color="#FFFFFF" />
-            )}
-          </TouchableOpacity>
+      {/* Edge-to-edge Camera wrapped in dedicated stable native container */}
+      <View key="camera-viewport-container" style={StyleSheet.absoluteFillObject}>
+        <CameraView
+          key="camera-view-native"
+          ref={cameraRef}
+          style={StyleSheet.absoluteFillObject}
+          facing={facing}
+          enableTorch={torchEnabled}
+        />
+      </View>
 
-          {/* Segmented Control */}
-          <View style={styles.segmentedContainer}>
-            <TouchableOpacity
-              style={[
-                styles.segmentTab,
-                scanType === 'PACKAGED' && styles.segmentTabActive,
-              ]}
-              onPress={() => handleSelectScanType('PACKAGED')}
-              activeOpacity={0.8}
-            >
-              <Package
-                size={14}
-                color={scanType === 'PACKAGED' ? colors.brand.primaryDark : 'rgba(255,255,255,0.7)'}
-              />
-              <Text
-                style={[
-                  styles.segmentText,
-                  scanType === 'PACKAGED' && styles.segmentTextActive,
-                ]}
-              >
-                Packaged
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.segmentTab,
-                scanType === 'LIVE_FOOD' && styles.segmentTabActive,
-              ]}
-              onPress={() => handleSelectScanType('LIVE_FOOD')}
-              activeOpacity={0.8}
-            >
-              <UtensilsCrossed
-                size={14}
-                color={scanType === 'LIVE_FOOD' ? colors.brand.primaryDark : 'rgba(255,255,255,0.7)'}
-              />
-              <Text
-                style={[
-                  styles.segmentText,
-                  scanType === 'LIVE_FOOD' && styles.segmentTextActive,
-                ]}
-              >
-                Live Food
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={styles.iconCircle}
-            onPress={handleToggleFacing}
-            activeOpacity={0.7}
-          >
-            <RefreshCw size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Center Viewfinder Reticle */}
-        <View style={styles.centerContainer}>
-          <View
-            style={[
-              styles.reticleFrame,
-              scanType === 'LIVE_FOOD' && styles.reticleFrameRound,
-            ]}
-            onLayout={() => setIsReticleReady(true)}
-          >
-            {/* Corner Bracket Accents */}
-            <View style={[styles.corner, styles.cornerTL]} />
-            <View style={[styles.corner, styles.cornerTR]} />
-            <View style={[styles.corner, styles.cornerBL]} />
-            <View style={[styles.corner, styles.cornerBR]} />
-
-            {/* Glowing animated scanline */}
-            <Animated.View style={[styles.scanLine, animatedScanLineStyle]} />
-
-            {/* Guiding Helper Text */}
-            <View style={styles.guideBadge}>
-              <Sparkles size={13} color={colors.brand.primary} />
-              <Text style={styles.guideText}>
-                {scanType === 'PACKAGED'
-                  ? 'Center barcode or ingredient label'
-                  : 'Frame your plate or dish'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Error Banner if any */}
-          {localError && (
-            <View style={styles.errorToast}>
-              <AlertCircle size={16} color="#FFFFFF" />
-              <Text style={styles.errorToastText}>{localError}</Text>
-            </View>
+      {/* Top Control Bar with Segmented Toggle */}
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={styles.iconCircle}
+          onPress={handleToggleTorch}
+          activeOpacity={0.7}
+        >
+          {torchEnabled ? (
+            <Zap size={20} color={colors.brand.amber} />
+          ) : (
+            <ZapOff size={20} color="#FFFFFF" />
           )}
-        </View>
+        </TouchableOpacity>
 
-        {/* Bottom Shutter Action Bar */}
-        <View style={styles.bottomBar}>
-          {/* Quick Demo Scan button */}
+        {/* Segmented Control */}
+        <View style={styles.segmentedContainer}>
           <TouchableOpacity
-            style={styles.quickScanButton}
-            onPress={handleDemoScan}
-            disabled={isScanning}
+            style={[
+              styles.segmentTab,
+              scanType === 'PACKAGED' && styles.segmentTabActive,
+            ]}
+            onPress={() => handleSelectScanType('PACKAGED')}
             activeOpacity={0.8}
           >
-            <Text style={styles.quickScanText}>AI Demo</Text>
+            <Package
+              size={14}
+              color={scanType === 'PACKAGED' ? colors.brand.primaryDark : 'rgba(255,255,255,0.7)'}
+            />
+            <Text
+              style={[
+                styles.segmentText,
+                scanType === 'PACKAGED' && styles.segmentTextActive,
+              ]}
+            >
+              Packaged
+            </Text>
           </TouchableOpacity>
 
-          {/* Shutter Button */}
           <TouchableOpacity
-            style={[styles.shutterOuter, isScanning && styles.shutterDisabled]}
-            onPress={handleCapture}
-            disabled={isScanning}
-            activeOpacity={0.85}
+            style={[
+              styles.segmentTab,
+              scanType === 'LIVE_FOOD' && styles.segmentTabActive,
+            ]}
+            onPress={() => handleSelectScanType('LIVE_FOOD')}
+            activeOpacity={0.8}
           >
-            <View style={styles.shutterInner} />
+            <UtensilsCrossed
+              size={14}
+              color={scanType === 'LIVE_FOOD' ? colors.brand.primaryDark : 'rgba(255,255,255,0.7)'}
+            />
+            <Text
+              style={[
+                styles.segmentText,
+                scanType === 'LIVE_FOOD' && styles.segmentTextActive,
+              ]}
+            >
+              Live Food
+            </Text>
           </TouchableOpacity>
-
-          {/* Spacer */}
-          <View style={{ width: 80 }} />
         </View>
 
-        {/* Real-time AI Processing Overlay */}
-        {isScanning && (
+        <TouchableOpacity
+          style={styles.iconCircle}
+          onPress={handleToggleFacing}
+          activeOpacity={0.7}
+        >
+          <RefreshCw size={18} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Center Viewfinder Reticle */}
+      <View style={styles.centerContainer} pointerEvents="box-none">
+        <View
+          style={[
+            styles.reticleFrame,
+            scanType === 'LIVE_FOOD' && styles.reticleFrameRound,
+          ]}
+          onLayout={() => setIsReticleReady(true)}
+        >
+          {/* Corner Bracket Accents */}
+          <View style={[styles.corner, styles.cornerTL]} />
+          <View style={[styles.corner, styles.cornerTR]} />
+          <View style={[styles.corner, styles.cornerBL]} />
+          <View style={[styles.corner, styles.cornerBR]} />
+
+          {/* Glowing animated scanline */}
           <Animated.View
-            entering={FadeIn.duration(200)}
-            exiting={FadeOut.duration(200)}
-            style={styles.processingBackdrop}
-          >
-            <View style={styles.processingCard}>
-              <ActivityIndicator size="large" color={colors.brand.primary} />
-              <Text style={styles.processingTitle}>
-                {scanType === 'PACKAGED'
-                  ? 'Decoding Ingredients & Additives...'
-                  : 'Analyzing Plate & Estimating Macros...'}
-              </Text>
-              <Text style={styles.processingSubtitle}>
-                Bao is evaluating health index and checking allergens
-              </Text>
-            </View>
-          </Animated.View>
+            key="camera-reticle-scanline"
+            style={[styles.scanLine, animatedScanLineStyle]}
+          />
+
+          {/* Guiding Helper Text */}
+          <View style={styles.guideBadge}>
+            <Sparkles size={13} color={colors.brand.primary} />
+            <Text style={styles.guideText}>
+              {scanType === 'PACKAGED'
+                ? 'Center barcode or ingredient label'
+                : 'Frame your plate or dish'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Error Banner if any */}
+        {localError && (
+          <View style={styles.errorToast}>
+            <AlertCircle size={16} color="#FFFFFF" />
+            <Text style={styles.errorToastText}>{localError}</Text>
+          </View>
         )}
-      </CameraView>
+      </View>
+
+      {/* Bottom Shutter Action Bar */}
+      <View style={styles.bottomBar}>
+        {/* Quick Demo Scan button */}
+        <TouchableOpacity
+          style={styles.quickScanButton}
+          onPress={handleDemoScan}
+          disabled={isScanning}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.quickScanText}>AI Demo</Text>
+        </TouchableOpacity>
+
+        {/* Shutter Button */}
+        <TouchableOpacity
+          style={[styles.shutterOuter, isScanning && styles.shutterDisabled]}
+          onPress={handleCapture}
+          disabled={isScanning}
+          activeOpacity={0.85}
+        >
+          <View style={styles.shutterInner} />
+        </TouchableOpacity>
+
+        {/* Spacer */}
+        <View style={{ width: 80 }} />
+      </View>
+
+      {/* Real-time AI Processing Overlay */}
+      {isScanning && (
+        <Animated.View
+          key="camera-processing-overlay"
+          entering={FadeIn.duration(200)}
+          exiting={FadeOut.duration(200)}
+          style={styles.processingBackdrop}
+        >
+          <View style={styles.processingCard}>
+            <ActivityIndicator size="large" color={colors.brand.primary} />
+            <Text style={styles.processingTitle}>
+              {scanType === 'PACKAGED'
+                ? 'Decoding Ingredients & Additives...'
+                : 'Analyzing Plate & Estimating Macros...'}
+            </Text>
+            <Text style={styles.processingSubtitle}>
+              Bao is evaluating health index and checking allergens
+            </Text>
+          </View>
+        </Animated.View>
+      )}
     </View>
   );
 };

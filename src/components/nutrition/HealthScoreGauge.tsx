@@ -62,6 +62,7 @@ export const HealthScoreGauge: React.FC<HealthScoreGaugeProps> = ({
       {/* Visual meter bar */}
       <View style={styles.meterTrack}>
         <Animated.View
+          key="health-score-gauge-fill"
           style={[
             styles.meterFill,
             { backgroundColor: currentTier.badge },

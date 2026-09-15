@@ -20,6 +20,7 @@ import {
   MascotAccessoryId,
 } from '../../types/mascot';
 import { Mascot3DErrorBoundary } from '../../components/mascot/Mascot3DErrorBoundary';
+import { Mascot2DAvatar } from '../../components/mascot/Mascot2DAvatar';
 
 // Lazy load 3D Canvas on-demand to avoid bundling three.js on initial app start
 const LazyMascot3DCanvas = React.lazy(
@@ -35,7 +36,7 @@ export default function MascotCustomizerModal() {
   const setAccessory = useMascotStore((state) => state.setAccessory);
 
   const [activeTab, setActiveTab] = useState<'skins' | 'accessories'>('skins');
-  const [use3DPreview, setUse3DPreview] = useState(false);
+  const [use3DPreview, setUse3DPreview] = useState(true);
 
   const skinList = Object.values(MASCOT_SKINS);
   const currentSkinData = MASCOT_SKINS[activeSkin] || MASCOT_SKINS.classic_panda;
@@ -60,39 +61,12 @@ export default function MascotCustomizerModal() {
 
   // Safe 2D Preview renderer
   const render2DPreview = () => (
-    <View style={styles.fallbackPreviewContainer}>
-      {activeAccessory !== 'none' && currentAccessoryData && (
-        <View style={styles.preview2DAccessory}>
-          <Text style={styles.preview2DAccessoryEmoji}>
-            {currentAccessoryData.emoji}
-          </Text>
-        </View>
-      )}
-      <View
-        style={[
-          styles.preview2DFace,
-          { backgroundColor: currentSkinData.coatColor },
-        ]}
-      >
-        <View style={styles.preview2DEyebrowRow}>
-          <View style={styles.preview2DEyebrow} />
-          <View style={styles.preview2DEyebrow} />
-        </View>
-        <View style={styles.preview2DEyes}>
-          <View style={styles.preview2DEyeDot} />
-          <View style={styles.preview2DEyeDot} />
-        </View>
-        <View
-          style={[
-            styles.preview2DSnout,
-            { backgroundColor: currentSkinData.snoutColor },
-          ]}
-        >
-          <View style={styles.preview2DNose} />
-          <View style={styles.preview2DMouth} />
-        </View>
-      </View>
-    </View>
+    <Mascot2DAvatar
+      mood={mood}
+      skin={activeSkin}
+      accessory={activeAccessory}
+      size={140}
+    />
   );
 
   return (
@@ -120,6 +94,14 @@ export default function MascotCustomizerModal() {
 
         {/* Live Stage Showcase */}
         <View style={styles.showcaseCard}>
+          {/* Background glow matching active skin color */}
+          <View
+            style={[
+              styles.showcaseGlow,
+              { backgroundColor: currentSkinData.coatColor },
+            ]}
+          />
+
           <View style={styles.previewCanvasWrapper}>
             {use3DPreview ? (
               <Mascot3DErrorBoundary
@@ -132,6 +114,7 @@ export default function MascotCustomizerModal() {
                     skin={activeSkin}
                     accessory={activeAccessory}
                     size={140}
+                    fallback={render2DPreview()}
                     onError={() => setUse3DPreview(false)}
                   />
                 </React.Suspense>
@@ -362,21 +345,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   showcaseCard: {
+    height: 220,
+    width: '100%',
     backgroundColor: colors.surface.card,
     borderRadius: radii.xl,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
+    justifyContent: 'center',
     marginVertical: spacing.md,
     borderWidth: 1,
     borderColor: colors.border.subtle,
+    position: 'relative',
+    overflow: 'hidden',
     ...shadows.card,
+  },
+  showcaseGlow: {
+    position: 'absolute',
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    opacity: 0.18,
+    alignSelf: 'center',
+    top: 15,
   },
   previewCanvasWrapper: {
     width: 140,
     height: 140,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 2,
   },
   fallbackPreviewContainer: {
     width: 90,

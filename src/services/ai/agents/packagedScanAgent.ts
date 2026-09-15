@@ -10,26 +10,56 @@ import { parseFoodLabel } from '../ocrParser';
 import { calculateNutritionScore } from '../nutritionScorer';
 import { ScannedProduct } from '../../../types/nutrition';
 
-// Strict Zod schema for Vision AI Output
+// Resilient Zod schema for Vision AI Output
 export const PackagedScanLLMResponseSchema = z.object({
-  name: z.string().min(1).default('Packaged Product'),
-  brand: z.string().optional().default('Food Brand'),
-  servingSize: z.string().optional().default('100g'),
-  ingredientsText: z.string().default(''),
-  macros: z.object({
-    calories: z.number().default(0),
-    protein: z.number().default(0),
-    carbohydrates: z.number().default(0),
-    sugars: z.number().default(0),
-    addedSugars: z.number().optional().default(0),
-    fat: z.number().default(0),
-    saturatedFat: z.number().default(0),
-    fiber: z.number().default(0),
-    sodium: z.number().default(0),
-  }),
-  flaggedAdditives: z.array(z.string()).optional().default([]),
-  allergensFound: z.array(z.string()).optional().default([]),
-  actionableTips: z.array(z.string()).optional().default([]),
+  name: z
+    .string()
+    .nullish()
+    .transform((val) => (val && val.trim().length > 0 ? val.trim() : 'Packaged Product'))
+    .default('Packaged Product'),
+  brand: z
+    .string()
+    .nullish()
+    .transform((val) => (val && val.trim().length > 0 ? val.trim() : 'Food Brand'))
+    .default('Food Brand'),
+  servingSize: z
+    .string()
+    .nullish()
+    .transform((val) => (val && val.trim().length > 0 ? val.trim() : '100g'))
+    .default('100g'),
+  ingredientsText: z
+    .string()
+    .nullish()
+    .default('')
+    .transform((val) => val || ''),
+  macros: z
+    .object({
+      calories: z.coerce.number().default(0),
+      protein: z.coerce.number().default(0),
+      carbohydrates: z.coerce.number().default(0),
+      sugars: z.coerce.number().default(0),
+      addedSugars: z.coerce.number().optional().default(0),
+      fat: z.coerce.number().default(0),
+      saturatedFat: z.coerce.number().default(0),
+      fiber: z.coerce.number().default(0),
+      sodium: z.coerce.number().default(0),
+    })
+    .default({}),
+  flaggedAdditives: z
+    .array(z.string())
+    .nullish()
+    .default([])
+    .transform((v) => v || []),
+  allergensFound: z
+    .array(z.string())
+    .nullish()
+    .default([])
+    .transform((v) => v || []),
+  actionableTips: z
+    .array(z.string())
+    .nullish()
+    .default([])
+    .transform((v) => v || []),
 });
 
 export type PackagedScanLLMResponse = z.infer<typeof PackagedScanLLMResponseSchema>;
@@ -113,8 +143,11 @@ Never output markdown text or formatting outside the JSON object.
     fallbackMockResponse,
   });
 
-  // 2. Strict Zod Validation
-  const validated = PackagedScanLLMResponseSchema.parse(rawResponse);
+  // 2. Resilient Zod Validation
+  const parseResult = PackagedScanLLMResponseSchema.safeParse(rawResponse);
+  const validated = parseResult.success
+    ? parseResult.data
+    : PackagedScanLLMResponseSchema.parse(fallbackMockResponse);
 
   // 3. Independent local OCR parsing & Additive matching
   const parsedLabel = parseFoodLabel(

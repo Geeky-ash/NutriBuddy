@@ -1,6 +1,6 @@
 /**
  * NutriBuddy AI Multimodal Vision Client
- * Supports Google Gemini 1.5 Flash and OpenAI GPT-4o with structured JSON outputs.
+ * Supports Google Gemini 2.0 Flash and OpenAI GPT-4o with structured JSON outputs.
  * Seamless offline/fallback resilience.
  */
 
@@ -11,6 +11,7 @@ export type AiProvider = AiProviderName;
 interface AiConfig {
   provider: AiProvider;
   geminiApiKey?: string;
+  geminiModel?: string;
   openaiApiKey?: string;
   timeoutMs?: number;
 }
@@ -18,8 +19,9 @@ interface AiConfig {
 const config: AiConfig = {
   provider: ENV.AI_PROVIDER,
   geminiApiKey: ENV.GEMINI_API_KEY,
+  geminiModel: ENV.GEMINI_MODEL || 'gemini-3.5-flash-lite',
   openaiApiKey: ENV.OPENAI_API_KEY,
-  timeoutMs: 9000,
+  timeoutMs: 22000,
 };
 
 export const setAiConfig = (overrides: Partial<AiConfig>) => {
@@ -55,7 +57,13 @@ export async function queryVisionAi<T = Record<string, any>>(
   // 2. Execute Gemini Vision API Call
   if (hasGeminiKey && (config.provider === 'gemini' || !hasOpenAiKey)) {
     try {
-      const response = await callGeminiVision(prompt, base64Image, config.geminiApiKey!, config.timeoutMs);
+      const response = await callGeminiVision(
+        prompt,
+        base64Image,
+        config.geminiApiKey!,
+        config.timeoutMs,
+        config.geminiModel
+      );
       return JSON.parse(response) as T;
     } catch (err) {
       console.warn('[AI Client] Gemini call failed or timed out. Engaging resilient fallback.', err);
@@ -87,64 +95,104 @@ async function callGeminiVision(
   prompt: string,
   base64Image: string | undefined,
   apiKey: string,
-  timeoutMs: number = 9000
+  timeoutMs: number = 22000,
+  modelName: string = config.geminiModel || 'gemini-3.5-flash-lite'
 ): Promise<string> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const fallbackModel =
+    modelName === 'gemini-3.5-flash-lite'
+      ? 'gemini-3.6-flash'
+      : 'gemini-3.5-flash-lite';
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const modelsToTry = [modelName, fallbackModel];
 
-  const parts: any[] = [{ text: prompt }];
+  let lastError: any = null;
 
-  if (base64Image) {
-    // Strip possible data URI header
-    const cleanBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
-    parts.push({
-      inline_data: {
-        mime_type: 'image/jpeg',
-        data: cleanBase64,
-      },
-    });
-  }
+  for (let i = 0; i < modelsToTry.length; i++) {
+    const currentModel = modelsToTry[i];
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: {
-          responseMimeType: 'application/json',
-          temperature: 0.2,
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
+
+    const parts: any[] = [{ text: prompt }];
+
+    if (base64Image) {
+      // Strip possible data URI header
+      const cleanBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '');
+      parts.push({
+        inline_data: {
+          mime_type: 'image/jpeg',
+          data: cleanBase64,
         },
-      }),
-    });
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      throw new Error(`Gemini API error (${res.status}): ${errorText}`);
+      });
     }
 
-    const data = await res.json();
-    const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!candidateText) {
-      throw new Error('Invalid or empty response candidate from Gemini.');
-    }
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [{ parts }],
+          generationConfig: {
+            responseMimeType: 'application/json',
+            temperature: 0.2,
+          },
+        }),
+      });
 
-    return candidateText;
-  } finally {
-    clearTimeout(timeoutId);
+      if (!res.ok) {
+        const errorText = await res.text();
+        const err = new Error(`Gemini API error (${res.status}): ${errorText}`);
+        if (
+          (res.status === 503 || res.status === 429 || res.status === 404) &&
+          i < modelsToTry.length - 1
+        ) {
+          console.warn(
+            `[AI Client] ${currentModel} returned ${res.status}. Seamlessly falling over to ${modelsToTry[i + 1]}...`
+          );
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+
+      const data = await res.json();
+      const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!candidateText) {
+        throw new Error('Invalid or empty response candidate from Gemini.');
+      }
+
+      return candidateText;
+    } catch (err: any) {
+      lastError = err;
+      if (
+        i < modelsToTry.length - 1 &&
+        (err?.message?.includes('503') ||
+          err?.message?.includes('429') ||
+          err?.name === 'AbortError')
+      ) {
+        console.warn(
+          `[AI Client] Attempt on ${currentModel} failed (${err.message}). Trying fallback ${modelsToTry[i + 1]}...`
+        );
+        continue;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
+
+  throw lastError || new Error('All Gemini model candidates failed.');
 }
 
 async function callOpenAiVision(
   prompt: string,
   base64Image: string | undefined,
   apiKey: string,
-  timeoutMs: number = 9000
+  timeoutMs: number = 22000
 ): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

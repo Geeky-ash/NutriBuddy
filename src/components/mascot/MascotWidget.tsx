@@ -27,6 +27,7 @@ import {
   MASCOT_ACCESSORIES,
 } from '../../types/mascot';
 import { Mascot3DErrorBoundary } from './Mascot3DErrorBoundary';
+import { Mascot2DAvatar } from './Mascot2DAvatar';
 import safeHaptics from '../../utils/haptics';
 
 // Lazy load 3D Canvas only when activated, keeping initial boot bundle fast and light
@@ -46,7 +47,7 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
   const dismissSpeech = useMascotStore((state) => state.dismissSpeech);
   const interact = useMascotStore((state) => state.interact);
 
-  const [use3D, setUse3D] = useState(false);
+  const [use3D, setUse3D] = useState(true);
   const [isMascotReady, setIsMascotReady] = useState(false);
 
   const skinData = MASCOT_SKINS[activeSkin] || MASCOT_SKINS.classic_panda;
@@ -139,100 +140,12 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
 
   // Safe 2D Reanimated Avatar Component
   const render2DAvatar = () => (
-    <View style={styles.mascotHead}>
-      {/* 2D Accessory indicator badge if active */}
-      {activeAccessory !== 'none' && currentAccessory && (
-        <View style={styles.accessoryTopBadge}>
-          <Text style={styles.accessoryEmoji}>{currentAccessory.emoji}</Text>
-        </View>
-      )}
-
-      {/* Fluffy Round Ears with dynamic skin coloring */}
-      <View
-        style={[
-          styles.ear,
-          styles.earLeft,
-          { backgroundColor: skinData.earColor },
-        ]}
-      >
-        <View
-          style={[
-            styles.innerEar,
-            { backgroundColor: skinData.innerEarColor },
-          ]}
-        />
-      </View>
-      <View
-        style={[
-          styles.ear,
-          styles.earRight,
-          { backgroundColor: skinData.earColor },
-        ]}
-      >
-        <View
-          style={[
-            styles.innerEar,
-            { backgroundColor: skinData.innerEarColor },
-          ]}
-        />
-      </View>
-
-      {/* Face Mask & Cheeks */}
-      <View
-        style={[styles.faceCircle, { backgroundColor: skinData.coatColor }]}
-      >
-        {/* White Brow Markings */}
-        <View style={styles.eyebrowRow}>
-          <View style={styles.eyebrow} />
-          <View style={styles.eyebrow} />
-        </View>
-
-        {/* Eyes Expression based on mood */}
-        <View style={styles.eyeRow}>
-          {mood === 'HAPPY' ? (
-            <>
-              <Text style={styles.eyeSmile}>^</Text>
-              <Text style={styles.eyeSmile}>^</Text>
-            </>
-          ) : mood === 'CAUTIOUS' ? (
-            <>
-              <View style={styles.eyeDot} />
-              <View
-                style={[styles.eyeDot, { transform: [{ scaleY: 0.6 }] }]}
-              />
-            </>
-          ) : mood === 'SAD' ? (
-            <>
-              <Text style={styles.eyeSad}>v</Text>
-              <Text style={styles.eyeSad}>v</Text>
-            </>
-          ) : (
-            <>
-              <View style={styles.eyeDot} />
-              <View style={styles.eyeDot} />
-            </>
-          )}
-        </View>
-
-        {/* Nose & Cute Mouth */}
-        <View
-          style={[styles.snout, { backgroundColor: skinData.snoutColor }]}
-        >
-          <View style={styles.noseDot} />
-          {mood === 'HAPPY' ? (
-            <View style={styles.mouthSmile} />
-          ) : mood === 'SAD' ? (
-            <View style={styles.mouthPout} />
-          ) : (
-            <View style={styles.mouthNeutral} />
-          )}
-        </View>
-
-        {/* Cheeks blush */}
-        <View style={styles.blushLeft} />
-        <View style={styles.blushRight} />
-      </View>
-    </View>
+    <Mascot2DAvatar
+      mood={mood}
+      skin={activeSkin}
+      accessory={activeAccessory}
+      size={54}
+    />
   );
 
   return (
@@ -244,6 +157,7 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
       {/* Dynamic Glassmorphism Speech Bubble */}
       {isSpeechVisible && (
         <Animated.View
+          key="mascot-speech-bubble-wrapper"
           entering={FadeInUp.springify().damping(12)}
           exiting={FadeOutDown.duration(200)}
           style={styles.speechBubbleWrapper}
@@ -283,6 +197,7 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
           style={styles.avatarTouchable}
         >
           <Animated.View
+            key="mascot-avatar-animated-frame"
             style={[
               styles.avatarContainer,
               { borderColor: getMoodAuraColor(mood) },
@@ -305,7 +220,8 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
                     mood={mood}
                     skin={activeSkin}
                     accessory={activeAccessory}
-                    size={58}
+                    size={62}
+                    fallback={render2DAvatar()}
                     onError={() => setUse3D(false)}
                   />
                 </React.Suspense>

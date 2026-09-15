@@ -26,7 +26,8 @@
       },
       "package": "com.nutribuddy.app",
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -41,6 +42,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "d063329e-be19-4742-baea-049cb2d0c90f"
+      }
     }
   }
 }
