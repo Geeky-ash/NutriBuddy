@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "NutriBuddy",
+    "slug": "nutribuddy",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./src/assets/images/icon.png",
+    "scheme": "nutribuddy",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./src/assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FAFAF7"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nutribuddy.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "NutriBuddy needs camera access to scan barcodes, food labels, and fresh plated meals."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/images/adaptive-icon.png",
+        "backgroundColor": "#FAFAF7"
+      },
+      "package": "com.nutribuddy.app",
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow NutriBuddy to access your camera to scan packaged products and live meals."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
