@@ -8,7 +8,10 @@ import {
 } from '../../src/services/ai/agents/liveFoodAgent';
 import { parseFoodLabel, cleanOcrText, tokenizeIngredients } from '../../src/services/ai/ocrParser';
 import { calculateNutritionScore } from '../../src/services/ai/nutritionScorer';
-import { orchestrateMascotReaction } from '../../src/services/ai/agents/mascotAgent';
+import {
+  orchestrateMascotReaction,
+  orchestrateMascotScanError,
+} from '../../src/services/ai/agents/mascotAgent';
 import { useMascotStore } from '../../src/store/useMascotStore';
 
 describe('PackagedScanLLMResponseSchema Validation', () => {
@@ -38,6 +41,33 @@ describe('PackagedScanLLMResponseSchema Validation', () => {
     expect(parsed.name).toBe('Organic Almond Milk');
     expect(parsed.macros.calories).toBe(35);
     expect(parsed.allergensFound).toContain('Tree Nuts');
+  });
+
+  it('resiliently handles low-light / dark photo outputs with empty name or missing fields', () => {
+    const darkPhotoPayload = {
+      name: '',
+      brand: '',
+      servingSize: '',
+      ingredientsText: '',
+      macros: {
+        calories: 0,
+        protein: 0,
+        carbohydrates: 0,
+        sugars: 0,
+        fat: 0,
+        saturatedFat: 0,
+        fiber: 0,
+        sodium: 0,
+      },
+      flaggedAdditives: [],
+      allergensFound: [],
+      actionableTips: [],
+    };
+
+    const parsed = PackagedScanLLMResponseSchema.parse(darkPhotoPayload);
+    expect(parsed.name).toBe('Packaged Product');
+    expect(parsed.brand).toBe('Food Brand');
+    expect(parsed.servingSize).toBe('100g');
   });
 
   it('fails validation when mandatory fields are missing or wrong types', () => {
@@ -92,6 +122,26 @@ describe('LiveFoodScanLLMResponseSchema Validation', () => {
     expect(parsed.dishName).toBe('Mediterranean Grilled Chicken Salad');
     expect(parsed.items).toHaveLength(2);
     expect(parsed.items[0].boundingBox?.x).toBe(15);
+  });
+
+  it('resiliently handles dark room / unidentifiable meal photos without throwing Zod errors', () => {
+    const darkPlatePayload = {
+      dishName: '',
+      items: [],
+      totalCalories: 0,
+      totalProtein: 0,
+      totalCarbs: 0,
+      totalFat: 0,
+      glycemicImpact: 'LOW',
+      dietaryHighlights: [],
+      actionableTips: [],
+    };
+
+    const parsed = LiveFoodScanLLMResponseSchema.parse(darkPlatePayload);
+    expect(parsed.dishName).toBe('Prepared Plate');
+    expect(parsed.items.length).toBeGreaterThan(0);
+    expect(parsed.items[0].name).toBe('Nutrient-Dense Component');
+    expect(parsed.actionableTips.length).toBeGreaterThan(0);
   });
 });
 
@@ -210,5 +260,13 @@ describe('Mascot Orchestration Agent', () => {
     const mascotState = useMascotStore.getState();
     expect(mascotState.mood).toBe('SAD');
     expect(mascotState.speechText).toContain('Peanuts');
+  });
+
+  it('triggers CAUTIOUS mood and helpful guidance on scan error or dark photos', () => {
+    orchestrateMascotScanError('Could not detect clear food. Try using the torch button!');
+
+    const mascotState = useMascotStore.getState();
+    expect(mascotState.mood).toBe('CAUTIOUS');
+    expect(mascotState.speechText).toContain('torch');
   });
 });

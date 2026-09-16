@@ -8,7 +8,10 @@ import {
   Switch,
   SafeAreaView,
   Platform,
+  Image,
+  Alert,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
   ShieldAlert,
@@ -20,11 +23,17 @@ import {
   Award,
   Sparkles,
   Target,
+  Pencil,
+  LogOut,
 } from 'lucide-react-native';
 import { colors, spacing, radii, typography, shadows } from '../../theme';
 import { useProfileStore, ALLERGEN_LIST, DIETARY_MODES } from '../../store/useProfileStore';
+import { useAuthStore } from '../../store/useAuthStore';
+import safeHaptics from '../../utils/haptics';
 
 export default function ProfileScreen() {
+  const router = useRouter();
+  const { profile, signOut } = useAuthStore();
   const userName = useProfileStore((state) => state.userName);
   const userTag = useProfileStore((state) => state.userTag);
   const goals = useProfileStore((state) => state.goals);
@@ -36,15 +45,40 @@ export default function ProfileScreen() {
   const setMascotVoiceEnabled = useProfileStore((state) => state.setMascotVoiceEnabled);
 
   const selectedAllergenCount = Object.values(activeAllergens).filter(Boolean).length;
+  const avatarUrl = profile?.avatar_url;
 
   const handleToggleAllergen = (name: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);
     toggleAllergen(name);
   };
 
   const handleToggleDietaryMode = (mode: string) => {
-    Haptics.selectionAsync();
+    safeHaptics.selection();
     toggleDietaryMode(mode);
+  };
+
+  const handleOpenEditProfile = () => {
+    safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);
+    router.push('/modal/edit-profile' as any);
+  };
+
+  const handleSignOut = () => {
+    safeHaptics.impact(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out of NutriBuddy?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+            router.replace('/auth' as any);
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -55,18 +89,42 @@ export default function ProfileScreen() {
       >
         {/* User Card */}
         <View style={styles.userCard}>
-          <View style={styles.userAvatar}>
-            <Text style={styles.userInitial}>{userName.charAt(0)}</Text>
-          </View>
+          <TouchableOpacity
+            style={styles.avatarWrapper}
+            onPress={handleOpenEditProfile}
+            activeOpacity={0.8}
+          >
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.userAvatarImage} />
+            ) : (
+              <View style={styles.userAvatar}>
+                <Text style={styles.userInitial}>{userName.charAt(0)}</Text>
+              </View>
+            )}
+            <View style={styles.editAvatarBadge}>
+              <Pencil size={11} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{userName}</Text>
-            <Text style={styles.userTag}>{userTag}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.userName}>{userName}</Text>
+            </View>
+            <Text style={styles.userTag}>
+              {profile?.email || profile?.phone || userTag}
+            </Text>
           </View>
-          <View style={styles.streakBadge}>
-            <Flame size={16} color={colors.brand.amber} />
-            <Text style={styles.streakText}>7-Day Streak</Text>
-          </View>
+
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={handleOpenEditProfile}
+            activeOpacity={0.8}
+          >
+            <Pencil size={14} color={colors.brand.primaryDark} />
+            <Text style={styles.editBtnText}>Edit</Text>
+          </TouchableOpacity>
         </View>
+
 
         {/* Nutritional Targets Overview */}
         <View style={styles.targetCard}>
@@ -209,6 +267,16 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {/* Sign Out Action Button */}
+        <TouchableOpacity
+          style={styles.signOutButton}
+          onPress={handleSignOut}
+          activeOpacity={0.8}
+        >
+          <LogOut size={16} color={colors.brand.crimson} />
+          <Text style={styles.signOutButtonText}>Sign Out of NutriBuddy</Text>
+        </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
   );
@@ -235,14 +303,35 @@ const styles = StyleSheet.create({
     borderColor: colors.surface.border,
     ...shadows.card,
   },
+  avatarWrapper: {
+    position: 'relative',
+    marginRight: spacing.md,
+  },
   userAvatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: colors.brand.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+  },
+  userAvatarImage: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+  },
+  editAvatarBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.brand.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
   userInitial: {
     ...typography.displayMedium,
@@ -251,6 +340,10 @@ const styles = StyleSheet.create({
   },
   userInfo: {
     flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   userName: {
     ...typography.headingMedium,
@@ -261,15 +354,40 @@ const styles = StyleSheet.create({
     color: colors.text.secondary,
     marginTop: 2,
   },
-  streakBadge: {
+  editBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.brand.amberLight,
-    paddingVertical: 6,
+    backgroundColor: colors.brand.primaryLight,
     paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: radii.full,
     gap: 4,
   },
+  editBtnText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.brand.primaryDark,
+    fontSize: 12,
+  },
+  signOutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    borderRadius: radii.lg,
+    paddingVertical: 13,
+    marginTop: spacing.xl,
+    gap: 8,
+  },
+  signOutButtonText: {
+    ...typography.bodyMedium,
+    fontWeight: '700',
+    color: colors.brand.crimson,
+    fontSize: 14,
+  },
+
   streakText: {
     ...typography.labelBold,
     color: '#B45309',

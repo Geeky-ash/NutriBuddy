@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -17,8 +18,10 @@ import Animated, {
   withTiming,
   FadeInUp,
   FadeOutDown,
+  runOnJS,
 } from 'react-native-reanimated';
-import { X, Sparkles, AlertCircle, Palette } from 'lucide-react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { X, Sparkles, Palette } from 'lucide-react-native';
 import { colors, radii, shadows, typography } from '../../theme';
 import { useMascotStore } from '../../store/useMascotStore';
 import {
@@ -26,12 +29,16 @@ import {
   MASCOT_SKINS,
   MASCOT_ACCESSORIES,
 } from '../../types/mascot';
-import { Mascot3DErrorBoundary } from './Mascot3DErrorBoundary';
 import { Mascot2DAvatar } from './Mascot2DAvatar';
 import safeHaptics from '../../utils/haptics';
 
-// Lazy load 3D Canvas only when activated, keeping initial boot bundle fast and light
-const LazyMascot3DCanvas = React.lazy(() => import('./Mascot3DCanvas'));
+const MASCOT_WIDTH = 80;
+const MASCOT_HEIGHT = 100;
+const PADDING_HORIZONTAL = 12;
+const TOP_INSET = Platform.OS === 'ios' ? 60 : 48;
+const BOTTOM_INSET = 74; // Safe margin above bottom tab bar navigation
+const INITIAL_BOTTOM = 90;
+const INITIAL_LEFT = 16;
 
 interface MascotWidgetProps {
   onTapMascot?: () => void;
@@ -39,16 +46,35 @@ interface MascotWidgetProps {
 
 export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
   const router = useRouter();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const screenWidth = windowWidth || 360;
+  const screenHeight = windowHeight || 780;
+
   const mood = useMascotStore((state) => state.mood);
   const activeSkin = useMascotStore((state) => state.activeSkin);
   const activeAccessory = useMascotStore((state) => state.activeAccessory);
   const speechText = useMascotStore((state) => state.speechText);
   const isSpeechVisible = useMascotStore((state) => state.isSpeechVisible);
   const dismissSpeech = useMascotStore((state) => state.dismissSpeech);
+  const setSpeech = useMascotStore((state) => state.setSpeech);
   const interact = useMascotStore((state) => state.interact);
 
-  const [use3D, setUse3D] = useState(true);
+  const [use3D, setUse3D] = useState(false);
   const [isMascotReady, setIsMascotReady] = useState(false);
+
+  // Clamping boundaries relative to INITIAL_LEFT and INITIAL_BOTTOM
+  const minX = PADDING_HORIZONTAL - INITIAL_LEFT;
+  const maxX = Math.max(minX, screenWidth - MASCOT_WIDTH - PADDING_HORIZONTAL - INITIAL_LEFT);
+  const initialTop = screenHeight - INITIAL_BOTTOM - MASCOT_HEIGHT;
+  const minY = TOP_INSET - initialTop;
+  const maxY = Math.min(16, (screenHeight - BOTTOM_INSET - MASCOT_HEIGHT) - initialTop);
+
+  // Drag coordinates shared values
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const startX = useSharedValue(0);
+  const startY = useSharedValue(0);
+  const isDragging = useSharedValue(false);
 
   const skinData = MASCOT_SKINS[activeSkin] || MASCOT_SKINS.classic_panda;
   const currentAccessory = MASCOT_ACCESSORIES.find(
@@ -104,6 +130,44 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
     };
   });
 
+  const animatedShadowStyle = useAnimatedStyle(() => {
+    const progress = Math.min(Math.abs(bounceY.value) / 6, 1);
+    return {
+      transform: [
+        { scaleX: 1 - progress * 0.25 },
+        { scaleY: 1 - progress * 0.15 },
+      ],
+      opacity: 0.25 - progress * 0.1,
+    };
+  });
+
+  const animatedDragStyle = useAnimatedStyle(() => {
+    return {
+      transform: [
+        { translateX: translateX.value },
+        { translateY: translateY.value },
+      ],
+    };
+  });
+
+  const animatedSpeechBubbleStyle = useAnimatedStyle(() => {
+    const isNearRight = maxX > 0 && translateX.value > maxX * 0.5;
+    return {
+      transform: [
+        {
+          translateX: withTiming(isNearRight ? -120 : 0, { duration: 180 }),
+        },
+      ],
+    };
+  });
+
+  const animatedTailStyle = useAnimatedStyle(() => {
+    const isNearRight = maxX > 0 && translateX.value > maxX * 0.5;
+    return {
+      marginLeft: withTiming(isNearRight ? 146 : 26, { duration: 180 }),
+    };
+  });
+
   const handleTap = () => {
     safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
     scale.value = withSequence(
@@ -120,30 +184,88 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
     if (onTapMascot) onTapMascot();
   };
 
+  const triggerDropHaptic = () => {
+    safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Drag Gesture with clamping boundaries and spring physics
+  const panGesture = Gesture.Pan()
+    .minDistance(5)
+    .onStart(() => {
+      'worklet';
+      isDragging.value = true;
+      startX.value = translateX.value;
+      startY.value = translateY.value;
+    })
+    .onUpdate((event) => {
+      'worklet';
+      const rawX = startX.value + event.translationX;
+      const rawY = startY.value + event.translationY;
+      // Clamp boundaries so Bao cannot be dragged off-screen or hidden behind bars
+      translateX.value = Math.min(Math.max(rawX, minX), maxX);
+      translateY.value = Math.min(Math.max(rawY, minY), maxY);
+    })
+    .onFinalize((event) => {
+      'worklet';
+      isDragging.value = false;
+
+      // Current position from left of screen
+      const currentLeft = INITIAL_LEFT + translateX.value;
+      const edgeThreshold = Math.min(76, screenWidth * 0.22);
+
+      let targetX = translateX.value;
+      // Snap softly to nearest edge if dropped near margins or flicked with velocity
+      if (currentLeft < edgeThreshold || event.velocityX < -400) {
+        targetX = minX;
+      } else if (currentLeft > screenWidth - MASCOT_WIDTH - edgeThreshold || event.velocityX > 400) {
+        targetX = maxX;
+      }
+
+      const targetY = Math.min(Math.max(translateY.value, minY), maxY);
+
+      const springConfig = {
+        damping: 16,
+        stiffness: 140,
+        mass: 0.8,
+      };
+
+      translateX.value = withSpring(targetX, springConfig);
+      translateY.value = withSpring(targetY, springConfig);
+      runOnJS(triggerDropHaptic)();
+    });
+
+  const tapGesture = Gesture.Tap()
+    .maxDuration(250)
+    .onEnd(() => {
+      'worklet';
+      runOnJS(handleTap)();
+    });
+
+  const mascotGesture = Gesture.Exclusive(panGesture, tapGesture);
+
   const openCustomizer = () => {
     safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);
     router.push('/modal/mascot-customizer');
   };
 
-  const getMoodAuraColor = (currentMood: MascotMood) => {
-    switch (currentMood) {
-      case 'HAPPY':
-        return colors.brand.primary;
-      case 'CAUTIOUS':
-        return colors.brand.amber;
-      case 'SAD':
-        return colors.brand.crimson;
-      default:
-        return skinData.badgeAccent || colors.mascot.idle;
-    }
+  const handleToggleEngine = () => {
+    safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
+    const next3D = !use3D;
+    setUse3D(next3D);
+    setSpeech(
+      next3D ? '3D Engine Enabled' : '2D Vector Mode Active',
+      3500
+    );
   };
 
-  // Safe 2D Reanimated Avatar Component
+  // Lightweight 2D Reanimated Full-Body Avatar Component (size: 54)
   const render2DAvatar = () => (
     <Mascot2DAvatar
       mood={mood}
       skin={activeSkin}
       accessory={activeAccessory}
+      equippedSkin={activeSkin}
+      equippedAccessory={activeAccessory}
       size={54}
     />
   );
@@ -154,112 +276,97 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
       pointerEvents="box-none"
       onLayout={() => setIsMascotReady(true)}
     >
-      {/* Dynamic Glassmorphism Speech Bubble */}
-      {isSpeechVisible && (
-        <Animated.View
-          key="mascot-speech-bubble-wrapper"
-          entering={FadeInUp.springify().damping(12)}
-          exiting={FadeOutDown.duration(200)}
-          style={styles.speechBubbleWrapper}
-        >
-          <View style={styles.speechBubble}>
-            <View style={styles.speechHeader}>
-              <TouchableOpacity
-                style={styles.mascotBadge}
-                onPress={openCustomizer}
-                activeOpacity={0.7}
-              >
-                <Sparkles size={11} color={colors.brand.primaryDark} />
-                <Text style={styles.mascotBadgeText}>Bao the Buddy</Text>
-                <Palette size={10} color={colors.text.muted} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={dismissSpeech}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                style={styles.closeButton}
-              >
-                <X size={12} color={colors.text.muted} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.speechContent}>{speechText}</Text>
-          </View>
-          {/* Speech bubble pointer notch */}
-          <View style={styles.speechTail} />
-        </Animated.View>
-      )}
-
-      {/* Mascot Avatar Stage */}
-      <View style={styles.avatarWrapper}>
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={handleTap}
-          style={styles.avatarTouchable}
-        >
+      <Animated.View
+        style={[styles.dragContainer, animatedDragStyle]}
+        pointerEvents="box-none"
+      >
+        {/* Dynamic Glassmorphism Speech Bubble */}
+        {isSpeechVisible && (
           <Animated.View
-            key="mascot-avatar-animated-frame"
-            style={[
-              styles.avatarContainer,
-              { borderColor: getMoodAuraColor(mood) },
-              animatedAvatarStyle,
-            ]}
+            key="mascot-speech-bubble-wrapper"
+            entering={FadeInUp.springify().damping(12)}
+            exiting={FadeOutDown.duration(200)}
+            style={styles.speechBubbleWrapper}
+            pointerEvents="box-none"
           >
-            {use3D ? (
-              /* Render 3D Stylized PBR Mesh with strict ErrorBoundary and dynamic lazy load */
-              <Mascot3DErrorBoundary
-                fallback={render2DAvatar()}
-                onError={() => {
-                  console.warn(
-                    '[MascotWidget] 3D canvas failed to initialize in environment. Falling back to 2D.'
-                  );
-                  setUse3D(false);
-                }}
-              >
-                <React.Suspense fallback={render2DAvatar()}>
-                  <LazyMascot3DCanvas
-                    mood={mood}
-                    skin={activeSkin}
-                    accessory={activeAccessory}
-                    size={62}
-                    fallback={render2DAvatar()}
-                    onError={() => setUse3D(false)}
-                  />
-                </React.Suspense>
-              </Mascot3DErrorBoundary>
-            ) : (
-              /* Render 2D Expressive Mascot Character */
-              render2DAvatar()
-            )}
-
-            {/* Mood status mini-chip badge (toggles 3D view) */}
-            <TouchableOpacity
-              style={[
-                styles.statusChip,
-                { backgroundColor: getMoodAuraColor(mood) },
-              ]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setUse3D((prev) => !prev);
-              }}
+            <Animated.View
+              style={animatedSpeechBubbleStyle}
+              pointerEvents="box-none"
             >
-              {mood === 'SAD' ? (
-                <AlertCircle size={9} color="#FFFFFF" />
-              ) : (
-                <Sparkles size={9} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
-          </Animated.View>
-        </TouchableOpacity>
+              <View style={styles.speechBubble} pointerEvents="auto">
+                <View style={styles.speechHeader}>
+                  <TouchableOpacity
+                    style={styles.mascotBadge}
+                    onPress={openCustomizer}
+                    activeOpacity={0.7}
+                  >
+                    <Sparkles size={11} color={colors.brand.primaryDark} />
+                    <Text style={styles.mascotBadgeText}>Bao the Buddy</Text>
+                    <Palette size={10} color={colors.text.muted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={dismissSpeech}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={styles.closeButton}
+                  >
+                    <X size={12} color={colors.text.muted} />
+                  </TouchableOpacity>
+                </View>
 
-        {/* Quick Wardrobe Button */}
-        <TouchableOpacity
-          activeOpacity={0.8}
-          style={styles.wardrobeButton}
-          onPress={openCustomizer}
-        >
-          <Palette size={11} color={colors.text.secondary} />
-        </TouchableOpacity>
-      </View>
+                <Text style={styles.speechContent}>{speechText}</Text>
+              </View>
+              {/* Speech bubble pointer notch */}
+              <Animated.View style={[styles.speechTail, animatedTailStyle]} />
+            </Animated.View>
+          </Animated.View>
+        )}
+
+        {/* Mascot Avatar Stage */}
+        <View style={styles.avatarWrapper} pointerEvents="box-none">
+          <GestureDetector gesture={mascotGesture}>
+            <Animated.View style={styles.avatarTouchable}>
+              {/* Dynamic Ground Shadow underneath Bao's feet */}
+              <Animated.View
+                key="mascot-ground-shadow"
+                style={[styles.groundShadow, animatedShadowStyle]}
+              />
+
+              <Animated.View
+                key="mascot-avatar-animated-frame"
+                style={[
+                  styles.avatarContainer,
+                  animatedAvatarStyle,
+                ]}
+              >
+                {render2DAvatar()}
+              </Animated.View>
+            </Animated.View>
+          </GestureDetector>
+
+          {/* Quick Wardrobe Button (🎨 Painter Palette Icon) */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.wardrobeButton}
+            onPress={openCustomizer}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Palette size={12} color={colors.text.secondary} />
+          </TouchableOpacity>
+
+          {/* Dedicated 2D/3D Engine Toggle Button (✨ Green Sparkle Icon) */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[
+              styles.engineToggleButton,
+              { backgroundColor: use3D ? '#10B981' : '#64748B' },
+            ]}
+            onPress={handleToggleEngine}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Sparkles size={12} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
     </View>
   );
 };
@@ -267,14 +374,25 @@ export const MascotWidget: React.FC<MascotWidgetProps> = ({ onTapMascot }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 104 : 88,
+    bottom: 90,
     left: 16,
+    width: 80,
+    height: 100,
     zIndex: 20,
     alignItems: 'flex-start',
   },
+  dragContainer: {
+    width: 80,
+    height: 100,
+    position: 'relative',
+  },
   speechBubbleWrapper: {
-    marginBottom: 8,
+    position: 'absolute',
+    bottom: 104,
+    left: 0,
+    width: 210,
     maxWidth: 220,
+    zIndex: 30,
   },
   speechBubble: {
     backgroundColor: 'rgba(255, 255, 255, 0.94)',
@@ -320,184 +438,65 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }],
   },
   avatarWrapper: {
+    width: 80,
+    height: 100,
     position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarTouchable: {
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+    width: 72,
+    height: 90,
+  },
+  groundShadow: {
+    position: 'absolute',
+    bottom: 6,
+    width: 38,
+    height: 6,
+    borderRadius: 19,
+    backgroundColor: 'rgba(15, 23, 42, 0.22)',
+    alignSelf: 'center',
+    zIndex: 0,
   },
   avatarContainer: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.floating,
-  },
-  mascotHead: {
-    width: 52,
-    height: 52,
+    width: 64,
+    height: 74,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
-  accessoryTopBadge: {
-    position: 'absolute',
-    top: -10,
-    alignSelf: 'center',
-    zIndex: 10,
-  },
-  accessoryEmoji: {
-    fontSize: 14,
-  },
-  ear: {
-    position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    top: -2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  earLeft: {
-    left: 2,
-    transform: [{ rotate: '-18deg' }],
-  },
-  earRight: {
-    right: 2,
-    transform: [{ rotate: '18deg' }],
-  },
-  innerEar: {
-    width: 9,
-    height: 9,
-    borderRadius: 4.5,
-  },
-  faceCircle: {
-    width: 46,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  eyebrowRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: 24,
-    marginTop: 2,
-  },
-  eyebrow: {
-    width: 6,
-    height: 2.5,
-    borderRadius: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  eyeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: 22,
-    marginTop: 2,
-    alignItems: 'center',
-  },
-  eyeDot: {
-    width: 4.5,
-    height: 4.5,
-    borderRadius: 2.25,
-    backgroundColor: '#1E293B',
-  },
-  eyeSmile: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#1E293B',
-    lineHeight: 12,
-  },
-  eyeSad: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#1E293B',
-    lineHeight: 10,
-  },
-  snout: {
-    width: 18,
-    height: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  noseDot: {
-    width: 4,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: '#1E293B',
-  },
-  mouthSmile: {
-    width: 6,
-    height: 3,
-    borderBottomWidth: 1.5,
-    borderColor: '#1E293B',
-    borderBottomLeftRadius: 3,
-    borderBottomRightRadius: 3,
-  },
-  mouthPout: {
-    width: 5,
-    height: 2.5,
-    borderTopWidth: 1.5,
-    borderColor: '#1E293B',
-    borderTopLeftRadius: 2.5,
-    borderTopRightRadius: 2.5,
-  },
-  mouthNeutral: {
-    width: 4,
-    height: 1.5,
-    backgroundColor: '#1E293B',
-  },
-  blushLeft: {
-    position: 'absolute',
-    left: 4,
-    bottom: 12,
-    width: 6,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
-  },
-  blushRight: {
-    position: 'absolute',
-    right: 4,
-    bottom: 12,
-    width: 6,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
-  },
-  statusChip: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   wardrobeButton: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    top: 2,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: colors.border.subtle,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.subtle,
-    zIndex: 10,
+    zIndex: 15,
+  },
+  engineToggleButton: {
+    position: 'absolute',
+    bottom: 6,
+    right: 0,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.subtle,
+    zIndex: 15,
   },
 });
 

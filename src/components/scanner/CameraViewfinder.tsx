@@ -37,7 +37,10 @@ import { useProfileStore } from '../../store/useProfileStore';
 import { ScanType } from '../../types/scan';
 import { processPackagedLabelScan } from '../../services/ai/agents/packagedScanAgent';
 import { processLiveFoodScan } from '../../services/ai/agents/liveFoodAgent';
-import { syncMascotWithScanResult } from '../../services/ai/agents/mascotAgent';
+import {
+  syncMascotWithScanResult,
+  orchestrateMascotScanError,
+} from '../../services/ai/agents/mascotAgent';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const RETICLE_SIZE = Math.min(SCREEN_WIDTH * 0.78, 300);
@@ -131,9 +134,25 @@ export const CameraViewfinder: React.FC<CameraViewfinderProps> = ({
       }
     } catch (err: any) {
       console.error('[Scanner Pipeline Error]', err);
-      const msg = err?.message || 'Unable to analyze image. Please ensure good lighting and try again.';
-      setLocalError(msg);
-      setScanError(msg);
+      let friendlyMsg = 'Unable to analyze image. Please ensure good lighting and try again.';
+      if (
+        err?.name === 'ZodError' ||
+        err?.issues ||
+        (typeof err?.message === 'string' && err.message.includes('too_small'))
+      ) {
+        friendlyMsg = 'Could not detect clear food or labels. Try using the torch button or brighter lighting.';
+      } else if (
+        typeof err?.message === 'string' &&
+        !err.message.startsWith('[') &&
+        !err.message.startsWith('{') &&
+        err.message.length < 120
+      ) {
+        friendlyMsg = err.message;
+      }
+
+      setLocalError(friendlyMsg);
+      setScanError(friendlyMsg);
+      orchestrateMascotScanError(friendlyMsg);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };

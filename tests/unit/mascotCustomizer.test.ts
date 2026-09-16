@@ -91,6 +91,18 @@ describe('Mascot Customization Engine & Wardrobe Store', () => {
       expect(acc?.description).toBeTruthy();
     });
   });
+
+  test('should announce 3D and 2D engine switch messages via speech state', () => {
+    const { setSpeech } = useMascotStore.getState();
+
+    setSpeech('3D Engine Enabled', 3500);
+    expect(useMascotStore.getState().speechText).toBe('3D Engine Enabled');
+    expect(useMascotStore.getState().isSpeechVisible).toBe(true);
+
+    setSpeech('2D Vector Mode Active', 3500);
+    expect(useMascotStore.getState().speechText).toBe('2D Vector Mode Active');
+    expect(useMascotStore.getState().isSpeechVisible).toBe(true);
+  });
 });
 
 describe('Environment Configuration & Secrets', () => {

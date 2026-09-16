@@ -106,3 +106,17 @@ export function syncMascotWithScanResult(
     });
   }
 }
+
+/**
+ * Handle low-light, blur, or camera scan failures with friendly mascot guidance.
+ */
+export function orchestrateMascotScanError(reason?: string): void {
+  const mascotStore = useMascotStore.getState();
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  mascotStore.setMood('CAUTIOUS');
+  mascotStore.setSpeech(
+    reason || "Hmm, it's a bit too dark or blurry to see clearly. Try turning on the torch or getting closer!",
+    9000
+  );
+}
+

@@ -95,15 +95,18 @@ async function callGeminiVision(
   prompt: string,
   base64Image: string | undefined,
   apiKey: string,
-  timeoutMs: number = 22000,
+  timeoutMs: number = 14000,
   modelName: string = config.geminiModel || 'gemini-3.5-flash-lite'
 ): Promise<string> {
+  // Always prioritize fast gemini-3.5-flash-lite (~800ms) over heavy models that abort on spikes
+  const primaryModel =
+    modelName === 'gemini-3.6-flash' ? 'gemini-3.5-flash-lite' : modelName;
   const fallbackModel =
-    modelName === 'gemini-3.5-flash-lite'
+    primaryModel === 'gemini-3.5-flash-lite'
       ? 'gemini-3.6-flash'
       : 'gemini-3.5-flash-lite';
 
-  const modelsToTry = [modelName, fallbackModel];
+  const modelsToTry = [primaryModel, fallbackModel];
 
   let lastError: any = null;
 

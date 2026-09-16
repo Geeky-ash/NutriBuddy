@@ -77,7 +77,19 @@ export async function processPackagedLabelScan(
   const prompt = `
 You are the NutriBuddy Packaged Food Vision Agent.
 Examine this packaged food label photograph.
-Extract:
+
+CRITICAL INSTRUCTION FOR LOW LIGHT / DARK ROOMS:
+If the image is too dark, blurry, or does not contain a discernible food package or nutrition label:
+- "name": "Unidentified Product"
+- "brand": "Unknown Brand"
+- "servingSize": "100g"
+- "ingredientsText": ""
+- "macros": { "calories": 0, "protein": 0, "carbohydrates": 0, "sugars": 0, "addedSugars": 0, "fat": 0, "saturatedFat": 0, "fiber": 0, "sodium": 0 }
+- "flaggedAdditives": []
+- "allergensFound": []
+- "actionableTips": ["The scene is too dark or blurry to read nutrition facts. Turn on the camera torch and try again!"]
+
+Otherwise, extract:
 1. "name": The clean product name (e.g. "Whole Grain Rolled Oats").
 2. "brand": The manufacturer/brand if visible.
 3. "servingSize": The reference serving size (e.g. "40g", "1 cup", or "100g").

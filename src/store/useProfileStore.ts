@@ -44,6 +44,8 @@ interface ProfileState {
   hapticsEnabled: boolean;
 
   // Actions
+  setUserName: (name: string) => void;
+  setUserTag: (tag: string) => void;
   toggleAllergen: (allergen: string) => void;
   toggleDietaryMode: (mode: string) => void;
   setGoals: (newGoals: Partial<UserGoals>) => void;
@@ -87,6 +89,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   },
   mascotVoiceEnabled: true,
   hapticsEnabled: true,
+
+  setUserName: (name) => set({ userName: name }),
+  setUserTag: (tag) => set({ userTag: tag }),
+
 
   toggleAllergen: (allergen) =>
     set((state) => ({

@@ -19,13 +19,7 @@ import {
   MascotSkinId,
   MascotAccessoryId,
 } from '../../types/mascot';
-import { Mascot3DErrorBoundary } from '../../components/mascot/Mascot3DErrorBoundary';
 import { Mascot2DAvatar } from '../../components/mascot/Mascot2DAvatar';
-
-// Lazy load 3D Canvas on-demand to avoid bundling three.js on initial app start
-const LazyMascot3DCanvas = React.lazy(
-  () => import('../../components/mascot/Mascot3DCanvas')
-);
 
 export default function MascotCustomizerModal() {
   const router = useRouter();
@@ -36,7 +30,6 @@ export default function MascotCustomizerModal() {
   const setAccessory = useMascotStore((state) => state.setAccessory);
 
   const [activeTab, setActiveTab] = useState<'skins' | 'accessories'>('skins');
-  const [use3DPreview, setUse3DPreview] = useState(true);
 
   const skinList = Object.values(MASCOT_SKINS);
   const currentSkinData = MASCOT_SKINS[activeSkin] || MASCOT_SKINS.classic_panda;
@@ -58,16 +51,6 @@ export default function MascotCustomizerModal() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     router.back();
   };
-
-  // Safe 2D Preview renderer
-  const render2DPreview = () => (
-    <Mascot2DAvatar
-      mood={mood}
-      skin={activeSkin}
-      accessory={activeAccessory}
-      size={140}
-    />
-  );
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -94,34 +77,23 @@ export default function MascotCustomizerModal() {
 
         {/* Live Stage Showcase */}
         <View style={styles.showcaseCard}>
-          {/* Background glow matching active skin color */}
+          {/* Ambient stage floor lighting matching active skin color */}
           <View
             style={[
-              styles.showcaseGlow,
+              styles.showcaseStageShadow,
               { backgroundColor: currentSkinData.coatColor },
             ]}
           />
 
           <View style={styles.previewCanvasWrapper}>
-            {use3DPreview ? (
-              <Mascot3DErrorBoundary
-                fallback={render2DPreview()}
-                onError={() => setUse3DPreview(false)}
-              >
-                <React.Suspense fallback={render2DPreview()}>
-                  <LazyMascot3DCanvas
-                    mood={mood}
-                    skin={activeSkin}
-                    accessory={activeAccessory}
-                    size={140}
-                    fallback={render2DPreview()}
-                    onError={() => setUse3DPreview(false)}
-                  />
-                </React.Suspense>
-              </Mascot3DErrorBoundary>
-            ) : (
-              render2DPreview()
-            )}
+            <Mascot2DAvatar
+              mood={mood}
+              skin={activeSkin}
+              accessory={activeAccessory}
+              equippedSkin={activeSkin}
+              equippedAccessory={activeAccessory}
+              size={140}
+            />
           </View>
 
           <View style={styles.showcaseMeta}>
@@ -345,11 +317,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   showcaseCard: {
-    height: 220,
+    height: 230,
     width: '100%',
     backgroundColor: colors.surface.card,
     borderRadius: radii.xl,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
     justifyContent: 'center',
@@ -357,21 +329,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.subtle,
     position: 'relative',
-    overflow: 'hidden',
     ...shadows.card,
   },
-  showcaseGlow: {
+  showcaseStageShadow: {
     position: 'absolute',
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    opacity: 0.18,
+    width: 110,
+    height: 10,
+    borderRadius: 5,
+    opacity: 0.22,
     alignSelf: 'center',
-    top: 15,
+    bottom: 38,
   },
   previewCanvasWrapper: {
-    width: 140,
-    height: 140,
+    width: '100%',
+    height: 160,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
