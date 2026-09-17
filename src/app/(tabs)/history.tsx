@@ -51,6 +51,7 @@ export default function HistoryScreen() {
   const getDailySummary = useScanHistoryStore((state) => state.getDailySummary);
   const getDatesWithEntries = useScanHistoryStore((state) => state.getDatesWithEntries);
   const removeEntry = useScanHistoryStore((state) => state.removeEntry);
+  const deleteScanLog = useScanHistoryStore((state) => state.deleteScanLog);
 
   const setScanSuccess = useScanStore((state) => state.setScanSuccess);
   const triggerReactivity = useMascotStore((state) => state.triggerReactivityForScore);
@@ -181,10 +182,10 @@ export default function HistoryScreen() {
     router.push('/modal/scan-results' as any);
   };
 
-  const handleDeleteItem = (id: string, e: any) => {
+  const handleDeleteItem = async (id: string, e: any) => {
     e.stopPropagation();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    removeEntry(id);
+    await deleteScanLog(id);
   };
 
   const getBadgeStyle = (grade: string) => {
@@ -426,13 +427,24 @@ export default function HistoryScreen() {
           )}
         </View>
 
-        {/* Daily Summary & Macro Breakdown Card */}
-        <View style={styles.summaryCard}>
+        {/* Daily Summary & Macro Breakdown Card (Interactive Link to Nutrition Info) */}
+        <TouchableOpacity
+          style={styles.summaryCard}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push('/modal/nutrition-info' as any);
+          }}
+          activeOpacity={0.88}
+        >
           <View style={styles.summaryHeader}>
             <View>
-              <Text style={styles.selectedDateBadge}>
-                {formatSelectedDateTitle(selectedDate)}
-              </Text>
+              <View style={styles.titleRowWithChevron}>
+                <Text style={styles.selectedDateBadge}>
+                  {formatSelectedDateTitle(selectedDate)}
+                </Text>
+                <Text style={styles.nutritionInfoLabel}>· Nutrition Info</Text>
+                <ChevronRight size={15} color={colors.brand.primary} strokeWidth={2.5} />
+              </View>
               <Text style={styles.summarySubtext}>
                 {dailySummary.count === 0
                   ? 'No meals logged yet'
@@ -550,7 +562,7 @@ export default function HistoryScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Dedicated Quick Add Food Button */}
         <TouchableOpacity
@@ -776,12 +788,14 @@ const styles = StyleSheet.create({
     marginVertical: spacing.md,
   },
   headerTitle: {
-    ...typography.displayMedium,
-    color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   headerSubtitle: {
-    ...typography.bodyMedium,
-    color: colors.text.secondary,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#64748B',
     marginTop: 2,
   },
   calendarToggleBtn: {
@@ -981,15 +995,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
+  titleRowWithChevron: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   selectedDateBadge: {
-    ...typography.headingMedium,
-    fontSize: 18,
-    color: colors.text.primary,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  nutritionInfoLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.brand.primaryDark,
   },
   summarySubtext: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    marginTop: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
   },
   scoreBadgeMini: {
     flexDirection: 'row',
@@ -1001,9 +1026,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   scoreBadgeMiniText: {
-    ...typography.labelBold,
     color: colors.brand.primaryDark,
     fontSize: 12,
+    fontWeight: '700',
   },
   calorieSection: {
     marginBottom: spacing.md,
@@ -1030,19 +1055,19 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
   calorieConsumed: {
-    ...typography.displayMedium,
     fontSize: 24,
-    color: colors.text.primary,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   calorieTarget: {
-    ...typography.bodyMedium,
-    fontSize: 14,
-    color: colors.text.muted,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#64748B',
   },
   calorieSublabel: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 11,
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '500',
   },
   progressBarTrack: {
     height: 8,
@@ -1073,20 +1098,19 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   macroName: {
-    ...typography.caption,
-    fontSize: 11,
-    color: colors.text.secondary,
-    fontWeight: '600',
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '700',
   },
   macroValue: {
-    ...typography.labelBold,
-    fontSize: 13,
-    color: colors.text.primary,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   macroTargetSmall: {
-    fontSize: 10,
-    color: colors.text.muted,
-    fontWeight: 'normal',
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '600',
   },
   macroTrack: {
     height: 4,
@@ -1139,12 +1163,13 @@ const styles = StyleSheet.create({
     borderColor: colors.brand.primary,
   },
   filterText: {
-    ...typography.labelBold,
     color: colors.text.secondary,
     fontSize: 12,
+    fontWeight: '700',
   },
   filterTextActive: {
     color: colors.brand.primaryDark,
+    fontWeight: '700',
   },
   listContainer: {
     gap: 10,

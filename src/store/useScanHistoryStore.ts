@@ -38,6 +38,7 @@ export interface DailyMacroSummary {
 
 interface ScanHistoryState {
   entries: HistoryEntry[];
+  scans: HistoryEntry[];
   searchQuery: string;
   activeFilter: 'ALL' | 'PACKAGED' | 'LIVE_FOOD' | 'WARNINGS';
   isInitialized: boolean;
@@ -46,6 +47,7 @@ interface ScanHistoryState {
   fetchScans: () => Promise<void>;
   addEntry: (entry: HistoryEntry) => void;
   removeEntry: (id: string) => void;
+  deleteScanLog: (id: string) => Promise<void>;
   clearHistory: () => void;
   setSearchQuery: (query: string) => void;
   setActiveFilter: (filter: 'ALL' | 'PACKAGED' | 'LIVE_FOOD' | 'WARNINGS') => void;
@@ -75,78 +77,9 @@ export function formatDateToKey(timestamp: number | Date): string {
   return `${year}-${month}-${day}`;
 }
 
-const SEED_ENTRIES: HistoryEntry[] = [
-  {
-    id: 'seed-1',
-    timestamp: Date.now() - 1000 * 60 * 45, // 45 mins ago
-    foodName: 'Grilled Atlantic Salmon & Broccoli',
-    brand: 'Home Prepared',
-    scanType: 'LIVE_FOOD',
-    healthGrade: 'A',
-    healthScore: 95,
-    macros: {
-      calories: 372,
-      protein: 37,
-      carbohydrates: 8,
-      sugars: 1.8,
-      fat: 20.5,
-      saturatedFat: 3.6,
-      fiber: 3.2,
-      sodium: 160,
-    },
-    flaggedAdditives: [],
-    allergenAlerts: [],
-    actionableTips: ['Drizzle lemon juice to maximize iron and micronutrient absorption.'],
-  },
-  {
-    id: 'seed-2',
-    timestamp: Date.now() - 1000 * 60 * 60 * 4, // 4 hours ago
-    foodName: 'Organic Greek Plain Yogurt',
-    brand: 'Stonyfield Farm',
-    scanType: 'PACKAGED',
-    healthGrade: 'A',
-    healthScore: 92,
-    macros: {
-      calories: 100,
-      protein: 17,
-      carbohydrates: 6,
-      sugars: 5,
-      fat: 0,
-      saturatedFat: 0,
-      fiber: 0,
-      sodium: 60,
-    },
-    flaggedAdditives: [],
-    allergenAlerts: ['Milk / Dairy'],
-    actionableTips: ['Great probiotic whole food with zero added sugars.'],
-  },
-  {
-    id: 'seed-3',
-    timestamp: Date.now() - 1000 * 60 * 60 * 24, // Yesterday
-    foodName: 'Crunchy Peanut Butter Energy Bar',
-    brand: 'Snack Brand',
-    scanType: 'PACKAGED',
-    healthGrade: 'D',
-    healthScore: 42,
-    macros: {
-      calories: 260,
-      protein: 5,
-      carbohydrates: 34,
-      sugars: 24,
-      addedSugars: 22,
-      fat: 11,
-      saturatedFat: 4,
-      fiber: 1,
-      sodium: 220,
-    },
-    flaggedAdditives: ['High Fructose Corn Syrup', 'Caramel Color (E150d)'],
-    allergenAlerts: ['Peanuts'],
-    actionableTips: ['Very high in added sugars. Consider swapping for raw roasted almonds.'],
-  },
-];
-
 export const useScanHistoryStore = create<ScanHistoryState>((set, get) => ({
-  entries: SEED_ENTRIES,
+  entries: [],
+  scans: [],
   searchQuery: '',
   activeFilter: 'ALL',
   isInitialized: false,
@@ -181,19 +114,22 @@ export const useScanHistoryStore = create<ScanHistoryState>((set, get) => ({
           const entryMap = new Map<string, HistoryEntry>();
           // DB scans take precedence
           loadedEntries.forEach((e) => entryMap.set(e.id, e));
-          // Keep existing or seed entries if not in DB
+          // Keep existing in-memory if not in DB
           state.entries.forEach((e) => {
             if (!entryMap.has(e.id)) {
               entryMap.set(e.id, e);
             }
           });
 
+          const sorted = Array.from(entryMap.values()).sort((a, b) => b.timestamp - a.timestamp);
           return {
-            entries: Array.from(entryMap.values()).sort((a, b) => b.timestamp - a.timestamp),
+            entries: sorted,
+            scans: sorted,
             isInitialized: true,
           };
         });
       } else {
+        // When SQLite returns 0 records, do NOT populate dummy meals. Keep clean empty list.
         set({ isInitialized: true });
       }
     } catch (err) {
@@ -203,9 +139,13 @@ export const useScanHistoryStore = create<ScanHistoryState>((set, get) => ({
   },
 
   addEntry: (entry) => {
-    set((state) => ({
-      entries: [entry, ...state.entries.filter((e) => e.id !== entry.id)],
-    }));
+    set((state) => {
+      const updated = [entry, ...state.entries.filter((e) => e.id !== entry.id)];
+      return {
+        entries: updated,
+        scans: updated,
+      };
+    });
 
     // Local SQLite persistence & background cloud sync
     const currentUserId = useAuthStore.getState().user?.id || null;
@@ -233,16 +173,33 @@ export const useScanHistoryStore = create<ScanHistoryState>((set, get) => ({
   },
 
   removeEntry: (id) => {
-    set((state) => ({
-      entries: state.entries.filter((e) => e.id !== id),
-    }));
+    set((state) => {
+      const updated = state.entries.filter((e) => e.id !== id);
+      return {
+        entries: updated,
+        scans: updated,
+      };
+    });
     deleteScan(id).catch((err) =>
       console.warn('[ScanHistoryStore] SQLite delete error:', err)
     );
   },
 
+  deleteScanLog: async (id) => {
+    // 1. Remove from local Zustand state immediately so the card vanishes and daily totals update instantly
+    set((state) => {
+      const updated = state.entries.filter((e) => e.id !== id);
+      return {
+        entries: updated,
+        scans: updated,
+      };
+    });
+    // 2. Execute an immediate DELETE in SQLite and delete corresponding record from Supabase
+    await deleteScan(id);
+  },
+
   clearHistory: () => {
-    set({ entries: [] });
+    set({ entries: [], scans: [] });
     clearScans().catch((err) =>
       console.warn('[ScanHistoryStore] SQLite clear error:', err)
     );

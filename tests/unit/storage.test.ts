@@ -221,8 +221,56 @@ describe('useScanHistoryStore', () => {
     expect(itemsYesterday[0].id).toBe('other-meal');
   });
 
-  it('runs fetchScans without error to load stored scans into memory', async () => {
+  it('runs fetchScans without error to load stored scans into memory and keeps entries empty if DB has 0 records', async () => {
     await expect(useScanHistoryStore.getState().fetchScans()).resolves.toBeUndefined();
     expect(useScanHistoryStore.getState().isInitialized).toBe(true);
+    expect(useScanHistoryStore.getState().entries).toHaveLength(0);
+    expect(useScanHistoryStore.getState().scans).toHaveLength(0);
+  });
+
+  it('deletes meal via deleteScanLog, immediately removing it from state and updating daily summary', async () => {
+    const entry: HistoryEntry = {
+      id: 'delete-me-123',
+      timestamp: Date.now(),
+      foodName: 'Grilled Chicken Breast',
+      scanType: 'LIVE_FOOD',
+      healthGrade: 'A',
+      healthScore: 95,
+      macros: { calories: 220, protein: 35, carbohydrates: 0, sugars: 0, fat: 4, saturatedFat: 1, fiber: 0, sodium: 120 },
+      flaggedAdditives: [],
+      allergenAlerts: [],
+    };
+
+    useScanHistoryStore.getState().addEntry(entry);
+    expect(useScanHistoryStore.getState().entries.some((e) => e.id === 'delete-me-123')).toBe(true);
+    expect(useScanHistoryStore.getState().getTodayCalories()).toBe(220);
+
+    await useScanHistoryStore.getState().deleteScanLog('delete-me-123');
+    expect(useScanHistoryStore.getState().entries.some((e) => e.id === 'delete-me-123')).toBe(false);
+    expect(useScanHistoryStore.getState().scans.some((e) => e.id === 'delete-me-123')).toBe(false);
+    expect(useScanHistoryStore.getState().getTodayCalories()).toBe(0);
+  });
+
+  it('deletes meal via unified scanStore deleteScanLog function', async () => {
+    const { deleteScanLog } = require('../../src/stores/scanStore');
+
+    const entry: HistoryEntry = {
+      id: 'delete-store-456',
+      timestamp: Date.now(),
+      foodName: 'Protein Shake',
+      scanType: 'PACKAGED',
+      healthGrade: 'A',
+      healthScore: 90,
+      macros: { calories: 180, protein: 30, carbohydrates: 5, sugars: 1, fat: 2, saturatedFat: 0.5, fiber: 2, sodium: 150 },
+      flaggedAdditives: [],
+      allergenAlerts: [],
+    };
+
+    useScanHistoryStore.getState().addEntry(entry);
+    expect(useScanHistoryStore.getState().entries.some((e) => e.id === 'delete-store-456')).toBe(true);
+
+    await deleteScanLog('delete-store-456');
+    expect(useScanHistoryStore.getState().entries.some((e) => e.id === 'delete-store-456')).toBe(false);
+    expect(useScanHistoryStore.getState().scans.some((e) => e.id === 'delete-store-456')).toBe(false);
   });
 });

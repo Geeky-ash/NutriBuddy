@@ -34,10 +34,18 @@ export const DIETARY_MODES = [
 
 export type DietaryModeName = typeof DIETARY_MODES[number];
 
+export interface PersonalMetrics {
+  gender: string;
+  heightCm: number;
+  weightKg: number;
+  birthDate: string;
+}
+
 interface ProfileState {
   userName: string;
   userTag: string;
   goals: UserGoals;
+  personalMetrics: PersonalMetrics;
   activeAllergens: Record<string, boolean>;
   activeDietaryModes: Record<string, boolean>;
   mascotVoiceEnabled: boolean;
@@ -48,6 +56,7 @@ interface ProfileState {
   setUserName: (name: string) => void;
   setUserTag: (tag: string) => void;
   setAvatarUrl: (url: string | null) => void;
+  setPersonalMetrics: (metrics: Partial<PersonalMetrics>) => void;
   toggleAllergen: (allergen: string) => void;
   toggleDietaryMode: (mode: string) => void;
   setGoals: (newGoals: Partial<UserGoals>) => void;
@@ -67,6 +76,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     targetProtein: 130,
     targetCarbs: 220,
     targetFat: 65,
+  },
+  personalMetrics: {
+    gender: 'Male',
+    heightCm: 175.0,
+    weightKg: 63.0,
+    birthDate: 'Jan 2, 2005',
   },
   activeAllergens: {
     'Peanuts': true,
@@ -96,6 +111,10 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   setUserName: (name) => set({ userName: name }),
   setUserTag: (tag) => set({ userTag: tag }),
   setAvatarUrl: (url) => set({ avatarUrl: url }),
+  setPersonalMetrics: (metrics) =>
+    set((state) => ({
+      personalMetrics: { ...state.personalMetrics, ...metrics },
+    })),
 
 
   toggleAllergen: (allergen) =>

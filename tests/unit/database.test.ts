@@ -6,6 +6,9 @@ import {
   clearScans,
   syncScanToSupabase,
   ScanRecord,
+  saveUserProfileLocal,
+  getUserProfileLocal,
+  UserProfileRecord,
 } from '../../src/services/storage/database';
 
 describe('SQLite Database Service (scans table)', () => {
@@ -91,5 +94,30 @@ describe('SQLite Database Service (scans table)', () => {
 
     const result = await syncScanToSupabase(scan, 'test-user');
     expect(typeof result).toBe('boolean');
+  });
+
+  it('saves and retrieves local user profile in SQLite user_profiles table', async () => {
+    const profile: UserProfileRecord = {
+      id: 'test-user-profile-1',
+      full_name: 'blazikenaf',
+      gender: 'Male',
+      height_cm: 175.0,
+      weight_kg: 63.0,
+      birth_date: 'Jan 2, 2005',
+      avatar_url: 'https://api.dicebear.com/7.x/personas/png?seed=blazikenaf',
+      updated_at: new Date().toISOString(),
+    };
+
+    await saveUserProfileLocal(profile);
+
+    const retrieved = await getUserProfileLocal('test-user-profile-1');
+    expect(retrieved).not.toBeNull();
+    expect(retrieved?.id).toBe('test-user-profile-1');
+    expect(retrieved?.full_name).toBe('blazikenaf');
+    expect(retrieved?.gender).toBe('Male');
+    expect(retrieved?.height_cm).toBe(175.0);
+    expect(retrieved?.weight_kg).toBe(63.0);
+    expect(retrieved?.birth_date).toBe('Jan 2, 2005');
+    expect(retrieved?.avatar_url).toContain('blazikenaf');
   });
 });

@@ -16,7 +16,19 @@ export interface ScanRecord {
   created_at: string;
 }
 
+export interface UserProfileRecord {
+  id: string;
+  full_name: string;
+  gender: string;
+  height_cm: number;
+  weight_kg: number;
+  birth_date: string;
+  avatar_url: string | null;
+  updated_at: string;
+}
+
 const STORAGE_KEY = '@nutribuddy_sqlite_scans';
+const PROFILE_STORAGE_KEY = '@nutribuddy_user_profile';
 let cachedDb: any = null;
 let isNativeSqlite = false;
 let initPromise: Promise<void> | null = null;
@@ -118,6 +130,16 @@ export async function initDatabase(): Promise<void> {
             image_uri TEXT,
             created_at TEXT NOT NULL
           );
+          CREATE TABLE IF NOT EXISTS user_profiles (
+            id TEXT PRIMARY KEY NOT NULL,
+            full_name TEXT,
+            gender TEXT,
+            height_cm REAL,
+            weight_kg REAL,
+            birth_date TEXT,
+            avatar_url TEXT,
+            updated_at TEXT NOT NULL
+          );
         `);
       }
     } catch (error) {
@@ -185,7 +207,7 @@ export async function getScans(userId?: string): Promise<ScanRecord[]> {
           'SELECT * FROM scans ORDER BY created_at DESC;'
         )) as ScanRecord[];
       }
-      if (rows && rows.length > 0) {
+      if (rows) {
         return rows;
       }
     } catch (err) {
@@ -209,7 +231,7 @@ export async function getScans(userId?: string): Promise<ScanRecord[]> {
 }
 
 /**
- * Deletes a scan record by ID.
+ * Deletes a scan record by ID from SQLite and AsyncStorage, and triggers Supabase cloud deletion.
  */
 export async function deleteScan(id: string): Promise<void> {
   await initDatabase();
@@ -233,6 +255,9 @@ export async function deleteScan(id: string): Promise<void> {
   } catch (err) {
     console.warn('[Database] AsyncStorage delete failed:', err);
   }
+
+  // Also delete from Supabase cloud
+  await deleteScanFromSupabase(id);
 }
 
 /**
@@ -316,6 +341,28 @@ export async function syncScanToSupabase(
   }
 }
 
+/**
+ * Deletes a scan record from Supabase `scans` and `meal_logs` tables.
+ */
+export async function deleteScanFromSupabase(id: string): Promise<boolean> {
+  if (!ENV.HAS_SUPABASE) return false;
+
+  try {
+    const [scansRes, mealLogsRes] = await Promise.allSettled([
+      supabase.from('scans').delete().eq('id', id),
+      supabase.from('meal_logs').delete().eq('id', id),
+    ]);
+
+    const scansSuccess = scansRes.status === 'fulfilled' && !scansRes.value.error;
+    const mealLogsSuccess = mealLogsRes.status === 'fulfilled' && !mealLogsRes.value.error;
+
+    return scansSuccess || mealLogsSuccess;
+  } catch (err) {
+    console.warn('[Supabase Sync] Remote scan deletion notice:', err);
+    return false;
+  }
+}
+
 // Internal helper for AsyncStorage mirroring
 async function updateAsyncStorageScan(record: ScanRecord): Promise<void> {
   try {
@@ -332,3 +379,74 @@ async function updateAsyncStorageScan(record: ScanRecord): Promise<void> {
     console.warn('[Database] AsyncStorage update error:', err);
   }
 }
+
+/**
+ * Saves or updates a user profile record in SQLite and AsyncStorage.
+ */
+export async function saveUserProfileLocal(profile: UserProfileRecord): Promise<void> {
+  await initDatabase();
+
+  const db = getDatabase();
+  if (db && isNativeSqlite) {
+    try {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO user_profiles (
+          id, full_name, gender, height_cm, weight_kg, birth_date, avatar_url, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+        profile.id,
+        profile.full_name,
+        profile.gender,
+        profile.height_cm,
+        profile.weight_kg,
+        profile.birth_date,
+        profile.avatar_url,
+        profile.updated_at
+      );
+    } catch (err) {
+      console.warn('[Database] SQLite saveUserProfileLocal error, using AsyncStorage:', err);
+    }
+  }
+
+  try {
+    await AsyncStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  } catch (err) {
+    console.warn('[Database] AsyncStorage saveUserProfileLocal error:', err);
+  }
+}
+
+/**
+ * Retrieves the local user profile from SQLite or AsyncStorage.
+ */
+export async function getUserProfileLocal(id?: string): Promise<UserProfileRecord | null> {
+  await initDatabase();
+
+  const db = getDatabase();
+  if (db && isNativeSqlite) {
+    try {
+      const query = id
+        ? 'SELECT * FROM user_profiles WHERE id = ? LIMIT 1;'
+        : 'SELECT * FROM user_profiles ORDER BY updated_at DESC LIMIT 1;';
+      const rows = id
+        ? await db.getAllAsync(query, id)
+        : await db.getAllAsync(query);
+
+      if (rows && rows.length > 0) {
+        return rows[0] as UserProfileRecord;
+      }
+    } catch (err) {
+      console.warn('[Database] SQLite getUserProfileLocal error, falling back:', err);
+    }
+  }
+
+  try {
+    const raw = await AsyncStorage.getItem(PROFILE_STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+  } catch (err) {
+    console.warn('[Database] AsyncStorage getUserProfileLocal error:', err);
+  }
+
+  return null;
+}
+

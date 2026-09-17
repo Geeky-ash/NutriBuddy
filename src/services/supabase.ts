@@ -36,6 +36,10 @@ export interface UserProfile {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  gender?: string | null;
+  height_cm?: number | null;
+  weight_kg?: number | null;
+  birth_date?: string | null;
   updated_at?: string;
 }
 

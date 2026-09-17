@@ -15,252 +15,207 @@ import {
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import {
+  ChevronLeft,
   X,
   Camera,
   Image as ImageIcon,
   User,
-  Flame,
+  Plus,
   Check,
-  LogOut,
-  Target,
-  Sparkles,
   RotateCcw,
+  Calendar,
+  Scale,
+  Ruler,
+  Minus,
+  Sparkles,
 } from 'lucide-react-native';
 import { colors, radii, shadows, spacing, typography } from '../../theme';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useProfileStore } from '../../store/useProfileStore';
+import { saveUserProfileLocal } from '../../services/storage/database';
+import { pickImageFromLibrary, capturePhotoWithCamera } from '../../utils/safeImagePicker';
 import safeHaptics from '../../utils/haptics';
-import { requireOptionalNativeModule } from 'expo-modules-core';
-
-function isNativeImagePickerAvailable(): boolean {
-  try {
-    if (process.env.NODE_ENV === 'test') return true;
-    const mod = requireOptionalNativeModule('ExponentImagePicker');
-    return mod !== null && mod !== undefined;
-  } catch {
-    return false;
-  }
-}
-
-function getImagePicker(): any {
-  if (!isNativeImagePickerAvailable()) {
-    return null;
-  }
-  try {
-    return require('expo-image-picker');
-  } catch (err) {
-    return null;
-  }
-}
 
 export const PRESET_AVATARS = [
   {
-    id: 'bao_classic',
-    name: 'Bao the Panda',
-    emoji: '🐼',
+    id: 'preset_hero_1',
+    name: 'Hero Kai',
+    bg: '#BAE6FD',
+    url: 'https://api.dicebear.com/7.x/personas/png?seed=blazikenaf&backgroundColor=bae6fd',
+  },
+  {
+    id: 'preset_char_2',
+    name: 'Amara',
+    bg: '#FED7AA',
+    url: 'https://api.dicebear.com/7.x/personas/png?seed=Amara&backgroundColor=fed7aa',
+  },
+  {
+    id: 'preset_char_3',
+    name: 'Chloe',
+    bg: '#FEF08A',
+    url: 'https://api.dicebear.com/7.x/personas/png?seed=Chloe&backgroundColor=fef08a',
+  },
+  {
+    id: 'preset_char_4',
+    name: 'Mia',
+    bg: '#FECDD3',
+    url: 'https://api.dicebear.com/7.x/personas/png?seed=Mia&backgroundColor=fecdd3',
+  },
+  {
+    id: 'preset_char_5',
+    name: 'Zara',
+    bg: '#A7F3D0',
+    url: 'https://api.dicebear.com/7.x/personas/png?seed=Zara&backgroundColor=a7f3d0',
+  },
+  {
+    id: 'preset_char_6',
+    name: 'Liam',
+    bg: '#DDD6FE',
+    url: 'https://api.dicebear.com/7.x/personas/png?seed=Liam&backgroundColor=ddd6fe',
+  },
+  {
+    id: 'preset_char_7',
+    name: 'Bao Panda',
     bg: '#ECFDF5',
     url: 'https://api.dicebear.com/7.x/bottts/png?seed=BaoPanda&backgroundColor=ecfdf5',
   },
-  {
-    id: 'avocado_zen',
-    name: 'Avocado Zen',
-    emoji: '🥑',
-    bg: '#F0FDF4',
-    url: 'https://api.dicebear.com/7.x/bottts/png?seed=AvocadoZen&backgroundColor=f0fdf4',
-  },
-  {
-    id: 'chef_bao',
-    name: 'Master Chef',
-    emoji: '👨‍🍳',
-    bg: '#FFFBEB',
-    url: 'https://api.dicebear.com/7.x/bottts/png?seed=MasterChef&backgroundColor=fffbeb',
-  },
-  {
-    id: 'berry_bliss',
-    name: 'Berry Vitality',
-    emoji: '🫐',
-    bg: '#EEF2FF',
-    url: 'https://api.dicebear.com/7.x/bottts/png?seed=BerryVitality&backgroundColor=eef2ff',
-  },
-  {
-    id: 'green_sprout',
-    name: 'Living Sprout',
-    emoji: '🌱',
-    bg: '#FEF9C3',
-    url: 'https://api.dicebear.com/7.x/bottts/png?seed=GoldenSprout&backgroundColor=fef9c3',
-  },
-  {
-    id: 'mindful_salad',
-    name: 'Clean Whole',
-    emoji: '🥗',
-    bg: '#F0FDFA',
-    url: 'https://api.dicebear.com/7.x/bottts/png?seed=MindfulEater&backgroundColor=f0fdfa',
-  },
-  {
-    id: 'active_pulse',
-    name: 'Active Flame',
-    emoji: '🔥',
-    bg: '#FFF1F2',
-    url: 'https://api.dicebear.com/7.x/bottts/png?seed=ActivePulse&backgroundColor=fff1f2',
-  },
-  {
-    id: 'zen_capybara',
-    name: 'Zen Capy',
-    emoji: '🧘',
-    bg: '#F5F3FF',
-    url: 'https://api.dicebear.com/7.x/bottts/png?seed=ZenCapy&backgroundColor=f5f3ff',
-  },
 ];
+
+const GENDER_OPTIONS = ['Male', 'Female', 'Non-binary'] as const;
 
 export default function EditProfileModal() {
   const router = useRouter();
-  const { profile, updateProfile, uploadAvatar, signOut } = useAuthStore();
+  const { profile, updateProfile, uploadAvatar } = useAuthStore();
+  const profileStore = useProfileStore();
 
-  const [fullName, setFullName] = useState(profile?.full_name || 'NutriExplorer');
-  const [dailyCalories, setDailyCalories] = useState(String(profile?.daily_calories || 2100));
-  const [proteinG, setProteinG] = useState(String(profile?.protein_g || 130));
-  const [carbsG, setCarbsG] = useState(String(profile?.carbs_g || 220));
-  const [fatG, setFatG] = useState(String(profile?.fat_g || 65));
+  const [fullName, setFullName] = useState(
+    profile?.full_name || profileStore.userName || 'blazikenaf'
+  );
+  const [genderIndex, setGenderIndex] = useState(() => {
+    const currentGender = profile?.gender || profileStore.personalMetrics?.gender || 'Male';
+    const idx = GENDER_OPTIONS.findIndex((g) => g.toLowerCase() === currentGender.toLowerCase());
+    return idx >= 0 ? idx : 0;
+  });
+  const [height, setHeight] = useState(() => {
+    if (profile?.height_cm) return `${profile.height_cm.toFixed(1)} cm`;
+    if (profileStore.personalMetrics?.heightCm) {
+      return `${profileStore.personalMetrics.heightCm.toFixed(1)} cm`;
+    }
+    return '175.0 cm';
+  });
+  const [weight, setWeight] = useState(() => {
+    if (profile?.weight_kg) return `${profile.weight_kg.toFixed(1)} kg`;
+    if (profileStore.personalMetrics?.weightKg) {
+      return `${profileStore.personalMetrics.weightKg.toFixed(1)} kg`;
+    }
+    return '63.0 kg';
+  });
+  const [birthDate, setBirthDate] = useState(
+    profile?.birth_date || profileStore.personalMetrics?.birthDate || 'Jan 2, 2005'
+  );
 
-  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(profile?.avatar_url || null);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(
+    profile?.avatar_url || profileStore.avatarUrl || PRESET_AVATARS[0].url
+  );
   const [isSaving, setIsSaving] = useState(false);
 
-  const displayAvatarUri = selectedImageUri;
+  const currentGender = GENDER_OPTIONS[genderIndex];
+  const displayAvatarUri = selectedImageUri || PRESET_AVATARS[0].url;
 
   const handleSelectPreset = (url: string) => {
     safeHaptics.selection();
     setSelectedImageUri(url);
   };
 
-  const handleResetToInitials = () => {
+  const handleResetAvatar = () => {
     safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedImageUri(null);
+    // Reset to default preset
+    setSelectedImageUri(PRESET_AVATARS[0].url);
+  };
+
+  const handleCycleGender = () => {
+    safeHaptics.selection();
+    setGenderIndex((prev) => (prev + 1) % GENDER_OPTIONS.length);
   };
 
   const handlePickImage = async () => {
     safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);
-    const ImagePicker = getImagePicker();
-    if (!ImagePicker) {
-      Alert.alert(
-        'Native Build Required',
-        'Custom photo gallery selection requires compiling the native image-picker module into your APK (npx expo run:android). In the meantime, you can customize your avatar instantly with any of the 8 preset mascot avatars below!'
-      );
-      return;
-    }
-
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission Needed', 'Photo gallery permission is required to choose an avatar image.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]?.uri) {
-        setSelectedImageUri(result.assets[0].uri);
-        safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
-      }
-    } catch (err: any) {
-      console.warn('[EditProfile] Library picker error:', err);
-      Alert.alert('Photo Picker Notice', err?.message || 'Unable to open photo library.');
+    const uri = await pickImageFromLibrary();
+    if (uri) {
+      setSelectedImageUri(uri);
+      safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
     }
   };
 
   const handleTakePhoto = async () => {
     safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);
-    const ImagePicker = getImagePicker();
-    if (!ImagePicker) {
-      Alert.alert(
-        'Native Build Required',
-        'Camera capture requires compiling the native camera module into your APK (npx expo run:android). In the meantime, you can customize your avatar instantly with any of the 8 preset mascot avatars below!'
-      );
-      return;
-    }
-
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission Needed', 'Camera permission is required to take an avatar photo.');
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]?.uri) {
-        setSelectedImageUri(result.assets[0].uri);
-        safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
-      }
-    } catch (err: any) {
-      console.warn('[EditProfile] Camera error:', err);
-      Alert.alert('Camera Notice', err?.message || 'Unable to access camera.');
+    const uri = await capturePhotoWithCamera();
+    if (uri) {
+      setSelectedImageUri(uri);
+      safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
     }
   };
-
-
 
   const handleSave = async () => {
     safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
     setIsSaving(true);
 
     try {
-      let finalAvatarUrl = profile?.avatar_url || null;
+      let finalAvatarUrl = selectedImageUri || profile?.avatar_url || null;
 
-      if (selectedImageUri) {
-        if (selectedImageUri.startsWith('http://') || selectedImageUri.startsWith('https://')) {
-          finalAvatarUrl = selectedImageUri;
-        } else {
-          const uploaded = await uploadAvatar(selectedImageUri);
-          if (uploaded) {
-            finalAvatarUrl = uploaded;
-          } else {
-            // Local fallback
-            finalAvatarUrl = selectedImageUri;
-          }
+      // If local photo picked from gallery/camera, upload to Supabase Storage 'avatars' bucket
+      if (
+        selectedImageUri &&
+        !selectedImageUri.startsWith('http://') &&
+        !selectedImageUri.startsWith('https://')
+      ) {
+        const uploaded = await uploadAvatar(selectedImageUri);
+        if (uploaded) {
+          finalAvatarUrl = uploaded;
         }
       }
 
+      const cleanName = fullName.trim() || 'blazikenaf';
+      const cleanGender = currentGender;
+      const parsedHeight = parseFloat(height.replace(/[^0-9.]/g, '')) || 175.0;
+      const parsedWeight = parseFloat(weight.replace(/[^0-9.]/g, '')) || 63.0;
+      const cleanBirthDate = birthDate.trim() || 'Jan 2, 2005';
+
+      // 1. Update Zustand store
+      useProfileStore.getState().setUserName(cleanName);
       useProfileStore.getState().setAvatarUrl(finalAvatarUrl);
+      useProfileStore.getState().setPersonalMetrics({
+        gender: cleanGender,
+        heightCm: parsedHeight,
+        weightKg: parsedWeight,
+        birthDate: cleanBirthDate,
+      });
 
-      const parsedCalories = parseInt(dailyCalories, 10) || 2100;
-      const parsedProtein = parseInt(proteinG, 10) || 130;
-      const parsedCarbs = parseInt(carbsG, 10) || 220;
-      const parsedFat = parseInt(fatG, 10) || 65;
-
-      const res = await updateProfile({
-        full_name: fullName.trim() || 'NutriExplorer',
-        daily_calories: parsedCalories,
-        protein_g: parsedProtein,
-        carbs_g: parsedCarbs,
-        fat_g: parsedFat,
+      // 2. Save locally in SQLite user_profiles table (and AsyncStorage mirror)
+      await saveUserProfileLocal({
+        id: profile?.id || 'guest-user',
+        full_name: cleanName,
+        gender: cleanGender,
+        height_cm: parsedHeight,
+        weight_kg: parsedWeight,
+        birth_date: cleanBirthDate,
         avatar_url: finalAvatarUrl,
+        updated_at: new Date().toISOString(),
+      });
+
+      // 3. Update Supabase remote profiles table
+      await updateProfile({
+        full_name: cleanName,
+        avatar_url: finalAvatarUrl,
+        gender: cleanGender,
+        height_cm: parsedHeight,
+        weight_kg: parsedWeight,
+        birth_date: cleanBirthDate,
       });
 
       setIsSaving(false);
-
-      if (res.success) {
-        safeHaptics.notification(Haptics.NotificationFeedbackType.Success);
-        router.back();
-      } else {
-        if (res.error && res.error.includes('schema cache')) {
-          Alert.alert(
-            'Profile Saved Locally',
-            'Your changes are saved on this device. To sync with your Supabase cloud database, run the SQL migration in your Supabase dashboard SQL editor.'
-          );
-        } else {
-          Alert.alert('Save Notice', res.error || 'Changes saved locally.');
-        }
-        router.back();
-      }
+      safeHaptics.notification(Haptics.NotificationFeedbackType.Success);
+      router.back();
     } catch (err) {
       console.warn('[EditProfile] Save error:', err);
       setIsSaving(false);
@@ -268,38 +223,20 @@ export default function EditProfileModal() {
     }
   };
 
-  const handleSignOutPress = () => {
-    safeHaptics.impact(Haptics.ImpactFeedbackStyle.Heavy);
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out of NutriBuddy on this device?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-            router.replace('/auth' as any);
-          },
-        },
-      ]
-    );
-  };
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Top Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Edit Profile</Text>
           <TouchableOpacity
-            style={styles.closeBtn}
+            style={styles.headerBackBtn}
             onPress={() => router.back()}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <X size={20} color={colors.text.secondary} />
+            <ChevronLeft size={24} color={colors.text.primary} />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Edit Profile</Text>
+          <View style={styles.headerPlaceholder} />
         </View>
 
         <ScrollView
@@ -307,215 +244,209 @@ export default function EditProfileModal() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Avatar Showcase & Edit Stage */}
-          <View style={styles.avatarCard}>
-            <View style={styles.avatarContainer}>
-              {displayAvatarUri ? (
-                <Image source={{ uri: displayAvatarUri }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarInitial}>
-                    {(fullName || 'N').charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-              )}
-              <View style={styles.cameraIconBadge}>
-                <Sparkles size={13} color="#FFFFFF" />
-              </View>
+          {/* 1. Large Main Avatar Preview Card */}
+          <View style={styles.previewCardWrapper}>
+            <View style={styles.avatarMainCard}>
+              {/* Circular guide framing */}
+              <View style={styles.circularGuideRing} />
+
+              {/* Avatar Preview Image */}
+              <Image
+                source={{ uri: displayAvatarUri }}
+                style={styles.avatarMainImage}
+                resizeMode="cover"
+              />
+
+              {/* Top-Right Badge Overlay Button */}
+              <TouchableOpacity
+                style={styles.avatarBadgeBtn}
+                onPress={handleResetAvatar}
+                activeOpacity={0.8}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Minus size={14} color="#EF4444" strokeWidth={3} />
+              </TouchableOpacity>
             </View>
+          </View>
 
-            <Text style={styles.avatarLabel}>Select Mascot Avatar</Text>
-            <Text style={styles.avatarSubtext}>
-              Tap any companion below for instant 1-tap customization
-            </Text>
-
-            {/* Curated Preset Avatars Grid */}
-            <View style={styles.presetsGrid}>
+          {/* 2. Preset Avatar Quick-Selector Row */}
+          <View style={styles.presetSection}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.presetsScrollContent}
+            >
               {PRESET_AVATARS.map((preset) => {
                 const isSelected = displayAvatarUri === preset.url;
                 return (
                   <TouchableOpacity
                     key={preset.id}
                     style={[
-                      styles.presetItem,
-                      isSelected && styles.presetItemActive,
+                      styles.presetCircle,
                       { backgroundColor: preset.bg },
+                      isSelected && styles.presetCircleSelected,
                     ]}
                     onPress={() => handleSelectPreset(preset.url)}
                     activeOpacity={0.75}
                   >
-                    <Image source={{ uri: preset.url }} style={styles.presetImage} />
-                    <View style={styles.presetEmojiBadge}>
-                      <Text style={styles.presetEmojiText}>{preset.emoji}</Text>
-                    </View>
+                    <Image source={{ uri: preset.url }} style={styles.presetCircleImage} />
                     {isSelected && (
-                      <View style={styles.presetCheckmark}>
-                        <Check size={10} color="#FFFFFF" strokeWidth={3} />
+                      <View style={styles.presetCheckmarkBadge}>
+                        <Check size={9} color="#FFFFFF" strokeWidth={3.5} />
                       </View>
                     )}
                   </TouchableOpacity>
                 );
               })}
-            </View>
 
-            {/* Auxiliary Photo Actions */}
-            <View style={styles.photoActions}>
+              {/* Final (+) Custom Photo Button */}
               <TouchableOpacity
-                style={styles.photoActionBtn}
+                style={styles.customPhotoCircle}
                 onPress={handlePickImage}
                 activeOpacity={0.8}
               >
-                <ImageIcon size={14} color={colors.text.secondary} />
-                <Text style={styles.photoActionText}>Choose Photo</Text>
+                <Plus size={22} color="#FFFFFF" strokeWidth={2.8} />
+              </TouchableOpacity>
+            </ScrollView>
+
+            {/* Side-by-Side [ Gallery ] and [ Camera ] Action Buttons */}
+            <View style={styles.dualPhotoActions}>
+              <TouchableOpacity
+                style={styles.photoPillBtn}
+                onPress={handlePickImage}
+                activeOpacity={0.8}
+              >
+                <ImageIcon size={18} color="#0F172A" />
+                <Text style={styles.photoPillText}>Gallery</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.photoActionBtn}
+                style={styles.photoPillBtn}
                 onPress={handleTakePhoto}
                 activeOpacity={0.8}
               >
-                <Camera size={14} color={colors.text.secondary} />
-                <Text style={styles.photoActionText}>Camera</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.photoActionBtn}
-                onPress={handleResetToInitials}
-                activeOpacity={0.8}
-              >
-                <RotateCcw size={14} color={colors.text.secondary} />
-                <Text style={styles.photoActionText}>Initials</Text>
+                <Camera size={18} color="#0F172A" />
+                <Text style={styles.photoPillText}>Camera</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-
-          {/* Personal Information */}
-          <Text style={styles.sectionHeader}>Personal Information</Text>
-          <View style={styles.formCard}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Full Name</Text>
-              <View style={styles.inputWrapper}>
-                <User size={18} color={colors.text.muted} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  value={fullName}
-                  onChangeText={setFullName}
-                  placeholder="Your Name"
-                  placeholderTextColor={colors.text.muted}
-                />
-              </View>
-            </View>
-
-            {profile?.email && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email (Read-only)</Text>
-                <View style={[styles.inputWrapper, styles.readOnlyWrapper]}>
-                  <Text style={styles.readOnlyText}>{profile.email}</Text>
-                </View>
-              </View>
-            )}
-
-            {profile?.phone && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone (Read-only)</Text>
-                <View style={[styles.inputWrapper, styles.readOnlyWrapper]}>
-                  <Text style={styles.readOnlyText}>{profile.phone}</Text>
-                </View>
-              </View>
-            )}
+          {/* 3. Editable Personal Info Form Cards */}
+          {/* Name Field Card */}
+          <View style={styles.nameCard}>
+            <TextInput
+              style={styles.nameInput}
+              value={fullName}
+              onChangeText={setFullName}
+              placeholder="Username / Full Name"
+              placeholderTextColor={colors.text.muted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
           </View>
 
-          {/* Nutritional Macro Goals */}
-          <Text style={styles.sectionHeader}>Daily Macro Targets</Text>
-          <View style={styles.formCard}>
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Daily Calorie Budget (kcal)</Text>
-              <View style={styles.inputWrapper}>
-                <Flame size={18} color={colors.brand.amber} style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  value={dailyCalories}
-                  onChangeText={setDailyCalories}
-                  placeholder="2100"
-                  placeholderTextColor={colors.text.muted}
-                  keyboardType="numeric"
-                />
+          {/* Grouped Personal Metrics Card */}
+          <View style={styles.metricsCard}>
+            {/* Gender Row */}
+            <TouchableOpacity
+              style={styles.metricRow}
+              onPress={handleCycleGender}
+              activeOpacity={0.7}
+            >
+              <View style={styles.metricIconBox}>
+                <User size={20} color="#10B981" />
               </View>
+              <Text style={styles.metricValueText}>{currentGender}</Text>
+              <View style={styles.genderCyclePill}>
+                <Text style={styles.genderCycleText}>Change</Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.metricDivider} />
+
+            {/* Height Row */}
+            <View style={styles.metricRow}>
+              <View style={styles.metricIconBox}>
+                <Ruler size={20} color="#10B981" />
+              </View>
+              <TextInput
+                style={styles.metricInput}
+                value={height}
+                onChangeText={setHeight}
+                placeholder="175.0 cm"
+                placeholderTextColor={colors.text.muted}
+                keyboardType="decimal-pad"
+              />
             </View>
 
-            <View style={styles.macroRow}>
-              <View style={[styles.inputGroup, styles.macroCol]}>
-                <Text style={styles.inputLabel}>Protein (g)</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={proteinG}
-                    onChangeText={setProteinG}
-                    placeholder="130"
-                    placeholderTextColor={colors.text.muted}
-                    keyboardType="numeric"
-                  />
-                </View>
-              </View>
+            <View style={styles.metricDivider} />
 
-              <View style={[styles.inputGroup, styles.macroCol]}>
-                <Text style={styles.inputLabel}>Carbs (g)</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={carbsG}
-                    onChangeText={setCarbsG}
-                    placeholder="220"
-                    placeholderTextColor={colors.text.muted}
-                    keyboardType="numeric"
-                  />
-                </View>
+            {/* Weight Row */}
+            <View style={styles.metricRow}>
+              <View style={styles.metricIconBox}>
+                <Scale size={20} color="#10B981" />
               </View>
+              <TextInput
+                style={styles.metricInput}
+                value={weight}
+                onChangeText={setWeight}
+                placeholder="63.0 kg"
+                placeholderTextColor={colors.text.muted}
+                keyboardType="decimal-pad"
+              />
+            </View>
 
-              <View style={[styles.inputGroup, styles.macroCol]}>
-                <Text style={styles.inputLabel}>Fat (g)</Text>
-                <View style={styles.inputWrapper}>
-                  <TextInput
-                    style={styles.textInput}
-                    value={fatG}
-                    onChangeText={setFatG}
-                    placeholder="65"
-                    placeholderTextColor={colors.text.muted}
-                    keyboardType="numeric"
-                  />
-                </View>
+            <View style={styles.metricDivider} />
+
+            {/* Date of Birth Row */}
+            <View style={styles.metricRow}>
+              <View style={styles.metricIconBox}>
+                <Calendar size={20} color="#10B981" />
               </View>
+              <TextInput
+                style={styles.metricInput}
+                value={birthDate}
+                onChangeText={setBirthDate}
+                placeholder="Jan 2, 2005"
+                placeholderTextColor={colors.text.muted}
+              />
             </View>
           </View>
 
-          {/* Save Changes Button */}
-          <TouchableOpacity
-            style={[styles.saveBtn, isSaving && styles.saveBtnDisabled]}
-            onPress={handleSave}
-            disabled={isSaving}
-            activeOpacity={0.85}
-          >
-            {isSaving ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <>
-                <Check size={18} color="#FFFFFF" strokeWidth={2.5} />
-                <Text style={styles.saveBtnText}>Save Profile Changes</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {/* Sign Out Section */}
-          <TouchableOpacity
-            style={styles.signOutBtn}
-            onPress={handleSignOutPress}
-            activeOpacity={0.8}
-          >
-            <LogOut size={16} color={colors.brand.crimson} />
-            <Text style={styles.signOutBtnText}>Sign Out of NutriBuddy</Text>
-          </TouchableOpacity>
+          {/* Descriptive Note */}
+          <Text style={styles.descriptiveNote}>
+            Gender, height, weight, and date of birth are used to calculate optimal calorie intake and health metrics.
+          </Text>
         </ScrollView>
+
+        {/* 4. Fixed Bottom Action Bar */}
+        <View style={styles.bottomBarContainer} pointerEvents="box-none">
+          <View style={styles.floatingCapsule}>
+            <TouchableOpacity
+              style={styles.capsuleBtn}
+              onPress={() => router.back()}
+              activeOpacity={0.7}
+              disabled={isSaving}
+            >
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <View style={styles.capsuleDivider} />
+
+            <TouchableOpacity
+              style={styles.capsuleBtn}
+              onPress={handleSave}
+              activeOpacity={0.7}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator size="small" color="#34D399" />
+              ) : (
+                <Text style={styles.saveBtnText}>Save</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -524,7 +455,7 @@ export default function EditProfileModal() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.surface.background,
+    backgroundColor: '#F8FAFC',
   },
   container: {
     flex: 1,
@@ -533,262 +464,280 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.subtle,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
   },
   headerTitle: {
-    ...typography.headingMedium,
-    color: colors.text.primary,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0F172A',
   },
-  closeBtn: {
-    padding: 6,
-    borderRadius: radii.full,
-    backgroundColor: colors.surface.subtle,
+  headerPlaceholder: {
+    width: 36,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
-    paddingBottom: 60,
+    paddingBottom: 110,
   },
-  avatarCard: {
-    backgroundColor: colors.surface.card,
-    borderRadius: radii.xl,
-    padding: spacing.xl,
+
+  // 1. Large Main Avatar Preview Card
+  previewCardWrapper: {
     alignItems: 'center',
     marginBottom: spacing.lg,
+  },
+  avatarMainCard: {
+    position: 'relative',
+    width: 192,
+    height: 192,
+    borderRadius: 28,
+    backgroundColor: '#E0F2FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: colors.surface.border,
+    borderColor: '#BAE6FD',
     ...shadows.card,
   },
-  avatarContainer: {
-    position: 'relative',
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    marginBottom: spacing.sm,
-  },
-  avatarImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-  },
-  avatarFallback: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: colors.brand.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: {
-    ...typography.displayMedium,
-    fontSize: 34,
-    color: colors.brand.primaryDark,
-    fontWeight: '700',
-  },
-  cameraIconBadge: {
+  circularGuideRing: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.brand.primary,
+    width: 168,
+    height: 168,
+    borderRadius: 84,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.75)',
+  },
+  avatarMainImage: {
+    width: 144,
+    height: 144,
+    borderRadius: 72,
+  },
+  avatarBadgeBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    ...shadows.card,
   },
-  avatarLabel: {
-    ...typography.caption,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-  avatarSubtext: {
-    ...typography.caption,
-    color: colors.text.secondary,
-    fontSize: 11,
-    marginBottom: spacing.md,
-    textAlign: 'center',
-  },
-  presetsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 10,
+
+  // 2. Preset Row & Action Buttons
+  presetSection: {
     marginBottom: spacing.lg,
-    maxWidth: 320,
   },
-  presetItem: {
+  presetsScrollContent: {
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: 2,
+    gap: 12,
+  },
+  presetCircle: {
     position: 'relative',
     width: 58,
     height: 58,
     borderRadius: 29,
-    borderWidth: 2,
-    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 3,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
-  presetItemActive: {
-    borderColor: colors.brand.primary,
-    transform: [{ scale: 1.08 }],
+  presetCircleSelected: {
+    borderColor: '#10B981',
+    transform: [{ scale: 1.06 }],
     ...shadows.card,
   },
-  presetImage: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  presetCircleImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
   },
-  presetEmojiBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    paddingHorizontal: 3,
-    paddingVertical: 1,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
-  },
-  presetEmojiText: {
-    fontSize: 10,
-  },
-  presetCheckmark: {
+  presetCheckmarkBadge: {
     position: 'absolute',
     top: -2,
     right: -2,
-    backgroundColor: colors.brand.primary,
-    borderRadius: radii.full,
-    width: 16,
-    height: 16,
+    width: 17,
+    height: 17,
+    borderRadius: 8.5,
+    backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
-  photoActions: {
+  customPhotoCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#064E3B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#047857',
+  },
+  dualPhotoActions: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: spacing.md,
   },
-  photoActionBtn: {
+  photoPillBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: radii.full,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.brand.primaryLight,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radii.full,
-    gap: 6,
-  },
-  photoActionText: {
-    ...typography.caption,
-    color: colors.brand.primaryDark,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  sectionHeader: {
-    ...typography.headingSmall,
-    color: colors.text.primary,
-    marginBottom: spacing.sm,
-    marginLeft: spacing.xs,
-  },
-  formCard: {
-    backgroundColor: colors.surface.card,
-    borderRadius: radii.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
+    justifyContent: 'center',
+    gap: 8,
     ...shadows.card,
   },
-  inputGroup: {
-    marginBottom: spacing.md,
-  },
-  inputLabel: {
-    ...typography.caption,
-    fontWeight: '700',
-    color: colors.text.primary,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    fontSize: 10,
-    letterSpacing: 0.5,
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface.subtle,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.surface.border,
-    paddingHorizontal: 12,
-    height: 48,
-  },
-  readOnlyWrapper: {
-    backgroundColor: '#F1F5F9',
-    borderColor: '#E2E8F0',
-  },
-  readOnlyText: {
-    ...typography.bodyMedium,
-    color: colors.text.muted,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  textInput: {
-    flex: 1,
-    ...typography.bodyMedium,
-    color: colors.text.primary,
+  photoPillText: {
     fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
   },
-  macroRow: {
-    flexDirection: 'row',
-    gap: 10,
+
+  // 3. Name Card
+  nameCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.card,
   },
-  macroCol: {
-    flex: 1,
-    marginBottom: 0,
+  nameInput: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    padding: 0,
   },
-  saveBtn: {
+
+  // 4. Metrics Card
+  metricsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...shadows.card,
+  },
+  metricRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.brand.primary,
-    borderRadius: radii.lg,
     paddingVertical: 14,
-    gap: 8,
-    marginTop: spacing.xs,
-    marginBottom: spacing.lg,
-    ...shadows.button,
   },
-  saveBtnDisabled: {
-    opacity: 0.65,
+  metricIconBox: {
+    width: 34,
+    alignItems: 'flex-start',
+  },
+  metricValueText: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  genderCyclePill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radii.full,
+  },
+  genderCycleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  metricInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+    padding: 0,
+  },
+  metricDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+  },
+  descriptiveNote: {
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 19,
+    color: '#64748B',
+    marginTop: 10,
+    paddingHorizontal: 8,
+  },
+
+  // 5. Fixed Bottom Action Bar
+  bottomBarContainer: {
+    position: 'absolute',
+    bottom: 24,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  floatingCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: radii.full,
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    gap: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 8,
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+      },
+    }),
+  },
+  capsuleBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  cancelBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  capsuleDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
   saveBtnText: {
-    ...typography.bodyLarge,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
-    fontSize: 15,
-  },
-  signOutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF1F2',
-    borderWidth: 1,
-    borderColor: '#FECDD3',
-    borderRadius: radii.lg,
-    paddingVertical: 12,
-    gap: 8,
-    marginBottom: spacing.xl,
-  },
-  signOutBtnText: {
-    ...typography.bodyMedium,
-    fontWeight: '700',
-    color: colors.brand.crimson,
-    fontSize: 14,
+    color: '#34D399',
   },
 });

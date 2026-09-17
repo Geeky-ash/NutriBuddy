@@ -37,6 +37,10 @@ const DEFAULT_PROFILE: UserProfile = {
   protein_g: 130,
   carbs_g: 220,
   fat_g: 65,
+  gender: 'Male',
+  height_cm: 175.0,
+  weight_kg: 63.0,
+  birth_date: 'Jan 2, 2005',
 };
 
 let authSubscriptionInitialized = false;
@@ -132,12 +136,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         // Sync with useProfileStore
         if (userProfile) {
           useProfileStore.getState().setUserName(userProfile.full_name || 'NutriExplorer');
+          if (userProfile.avatar_url) {
+            useProfileStore.getState().setAvatarUrl(userProfile.avatar_url);
+          }
           useProfileStore.getState().setGoals({
             dailyCalories: userProfile.daily_calories,
             targetProtein: userProfile.protein_g,
             targetCarbs: userProfile.carbs_g,
             targetFat: userProfile.fat_g,
           });
+          if (userProfile.gender || userProfile.height_cm || userProfile.weight_kg || userProfile.birth_date) {
+            useProfileStore.getState().setPersonalMetrics({
+              ...(userProfile.gender ? { gender: userProfile.gender } : {}),
+              ...(userProfile.height_cm ? { heightCm: userProfile.height_cm } : {}),
+              ...(userProfile.weight_kg ? { weightKg: userProfile.weight_kg } : {}),
+              ...(userProfile.birth_date ? { birthDate: userProfile.birth_date } : {}),
+            });
+          }
         }
 
         set({
@@ -625,12 +640,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (updatedProfile.full_name) {
       useProfileStore.getState().setUserName(updatedProfile.full_name);
     }
+    if (updatedProfile.avatar_url !== undefined) {
+      useProfileStore.getState().setAvatarUrl(updatedProfile.avatar_url);
+    }
     useProfileStore.getState().setGoals({
       dailyCalories: updatedProfile.daily_calories,
       targetProtein: updatedProfile.protein_g,
       targetCarbs: updatedProfile.carbs_g,
       targetFat: updatedProfile.fat_g,
     });
+    if (updatedProfile.gender || updatedProfile.height_cm || updatedProfile.weight_kg || updatedProfile.birth_date) {
+      useProfileStore.getState().setPersonalMetrics({
+        ...(updatedProfile.gender ? { gender: updatedProfile.gender } : {}),
+        ...(updatedProfile.height_cm ? { heightCm: updatedProfile.height_cm } : {}),
+        ...(updatedProfile.weight_kg ? { weightKg: updatedProfile.weight_kg } : {}),
+        ...(updatedProfile.birth_date ? { birthDate: updatedProfile.birth_date } : {}),
+      });
+    }
 
     if (!ENV.HAS_SUPABASE || current.id === 'guest-user') {
       return { success: true };
@@ -642,6 +668,36 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         .upsert(updatedProfile);
 
       if (error) {
+        // If remote database lacks personal metric columns, fallback to upserting standard profile columns
+        const isMissingColumn =
+          error.message?.includes('schema cache') ||
+          error.message?.includes('column of \'profiles\'') ||
+          error.message?.includes('column');
+
+        if (isMissingColumn) {
+          const baseProfile = {
+            id: updatedProfile.id,
+            email: updatedProfile.email,
+            phone: updatedProfile.phone,
+            full_name: updatedProfile.full_name,
+            avatar_url: updatedProfile.avatar_url,
+            daily_calories: updatedProfile.daily_calories,
+            protein_g: updatedProfile.protein_g,
+            carbs_g: updatedProfile.carbs_g,
+            fat_g: updatedProfile.fat_g,
+            updated_at: updatedProfile.updated_at,
+          };
+
+          const { error: fallbackErr } = await supabase
+            .from('profiles')
+            .upsert(baseProfile);
+
+          if (!fallbackErr) {
+            // Succeeded with base profile; personal metrics remain securely stored in SQLite & Zustand
+            return { success: true };
+          }
+        }
+
         console.warn('[AuthStore] Remote profile sync warning:', error.message);
         return { success: false, error: error.message };
       }
