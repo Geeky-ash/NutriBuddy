@@ -28,8 +28,30 @@ import {
 } from 'lucide-react-native';
 import { colors, radii, shadows, spacing, typography } from '../../theme';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useProfileStore } from '../../store/useProfileStore';
 import safeHaptics from '../../utils/haptics';
-import { pickImageFromLibrary, capturePhotoWithCamera } from '../../utils/safeImagePicker';
+import { requireOptionalNativeModule } from 'expo-modules-core';
+
+function isNativeImagePickerAvailable(): boolean {
+  try {
+    if (process.env.NODE_ENV === 'test') return true;
+    const mod = requireOptionalNativeModule('ExponentImagePicker');
+    return mod !== null && mod !== undefined;
+  } catch {
+    return false;
+  }
+}
+
+function getImagePicker(): any {
+  if (!isNativeImagePickerAvailable()) {
+    return null;
+  }
+  try {
+    return require('expo-image-picker');
+  } catch (err) {
+    return null;
+  }
+}
 
 export const PRESET_AVATARS = [
   {
@@ -115,21 +137,72 @@ export default function EditProfileModal() {
     setSelectedImageUri(null);
   };
 
-  const handleChooseFromLibrary = async () => {
+  const handlePickImage = async () => {
     safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);
-    const uri = await pickImageFromLibrary();
-    if (uri) {
-      setSelectedImageUri(uri);
-      safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
+    const ImagePicker = getImagePicker();
+    if (!ImagePicker) {
+      Alert.alert(
+        'Native Build Required',
+        'Custom photo gallery selection requires compiling the native image-picker module into your APK (npx expo run:android). In the meantime, you can customize your avatar instantly with any of the 8 preset mascot avatars below!'
+      );
+      return;
+    }
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Needed', 'Photo gallery permission is required to choose an avatar image.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        setSelectedImageUri(result.assets[0].uri);
+        safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
+      }
+    } catch (err: any) {
+      console.warn('[EditProfile] Library picker error:', err);
+      Alert.alert('Photo Picker Notice', err?.message || 'Unable to open photo library.');
     }
   };
 
   const handleTakePhoto = async () => {
     safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);
-    const uri = await capturePhotoWithCamera();
-    if (uri) {
-      setSelectedImageUri(uri);
-      safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
+    const ImagePicker = getImagePicker();
+    if (!ImagePicker) {
+      Alert.alert(
+        'Native Build Required',
+        'Camera capture requires compiling the native camera module into your APK (npx expo run:android). In the meantime, you can customize your avatar instantly with any of the 8 preset mascot avatars below!'
+      );
+      return;
+    }
+
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission Needed', 'Camera permission is required to take an avatar photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        setSelectedImageUri(result.assets[0].uri);
+        safeHaptics.impact(Haptics.ImpactFeedbackStyle.Medium);
+      }
+    } catch (err: any) {
+      console.warn('[EditProfile] Camera error:', err);
+      Alert.alert('Camera Notice', err?.message || 'Unable to access camera.');
     }
   };
 
@@ -149,9 +222,14 @@ export default function EditProfileModal() {
           const uploaded = await uploadAvatar(selectedImageUri);
           if (uploaded) {
             finalAvatarUrl = uploaded;
+          } else {
+            // Local fallback
+            finalAvatarUrl = selectedImageUri;
           }
         }
       }
+
+      useProfileStore.getState().setAvatarUrl(finalAvatarUrl);
 
       const parsedCalories = parseInt(dailyCalories, 10) || 2100;
       const parsedProtein = parseInt(proteinG, 10) || 130;
@@ -284,11 +362,11 @@ export default function EditProfileModal() {
             <View style={styles.photoActions}>
               <TouchableOpacity
                 style={styles.photoActionBtn}
-                onPress={handleChooseFromLibrary}
+                onPress={handlePickImage}
                 activeOpacity={0.8}
               >
                 <ImageIcon size={14} color={colors.text.secondary} />
-                <Text style={styles.photoActionText}>Custom Photo</Text>
+                <Text style={styles.photoActionText}>Choose Photo</Text>
               </TouchableOpacity>
 
               <TouchableOpacity

@@ -47,22 +47,25 @@ export async function uploadAvatarToStorage(
   userId: string,
   localUri: string
 ): Promise<string> {
+  if (!localUri) return '';
+
+  // 1. Remote preset URLs (DiceBear, CDN images) do not need to be re-uploaded
+  if (localUri.startsWith('http://') || localUri.startsWith('https://')) {
+    return localUri;
+  }
+
+  // 2. If Supabase is not configured or in offline mode, fall back to local URI
+  if (!ENV.HAS_SUPABASE || supabaseUrl.includes('placeholder')) {
+    return localUri;
+  }
+
   try {
-    if (!ENV.HAS_SUPABASE || supabaseUrl.includes('placeholder')) {
-      return localUri;
-    }
-
-    // Remote preset URLs (DiceBear, CDN images) do not need to be uploaded to storage
-    if (localUri.startsWith('http://') || localUri.startsWith('https://')) {
-      return localUri;
-    }
-
     const response = await fetch(localUri);
     const arrayBuffer = await response.arrayBuffer();
 
     const fileExt = localUri.split('.').pop()?.toLowerCase() || 'jpg';
     const mimeType = fileExt === 'png' ? 'image/png' : 'image/jpeg';
-    const filePath = `${userId}/avatar_${Date.now()}.${fileExt}`;
+    const filePath = `${userId}/${Date.now()}.${fileExt === 'png' ? 'png' : 'jpg'}`;
 
     const { error: uploadError } = await supabase.storage
       .from('avatars')
@@ -72,14 +75,14 @@ export async function uploadAvatarToStorage(
       });
 
     if (uploadError) {
-      console.warn('[Supabase Storage] Avatar upload warning:', uploadError.message);
+      console.warn('[Supabase Storage] Avatar upload notice:', uploadError.message);
       return localUri;
     }
 
     const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
     return data?.publicUrl || localUri;
-  } catch (error) {
-    console.warn('[Supabase Storage] Failed to upload avatar, using local fallback:', error);
+  } catch (error: any) {
+    console.warn('[Supabase Storage] Failed to upload avatar, using local fallback:', error?.message || error);
     return localUri;
   }
 }

@@ -9,6 +9,8 @@ module.exports = {
     '^expo-image-picker$': '<rootDir>/tests/mocks/expo-image-picker.ts',
     '^expo-web-browser$': '<rootDir>/tests/mocks/expo-web-browser.ts',
     '^expo-auth-session$': '<rootDir>/tests/mocks/expo-auth-session.ts',
+    '^expo-sqlite$': '<rootDir>/tests/mocks/expo-sqlite.ts',
+    '^@react-native-async-storage/async-storage$': '<rootDir>/tests/mocks/async-storage.ts',
   },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.json' }],

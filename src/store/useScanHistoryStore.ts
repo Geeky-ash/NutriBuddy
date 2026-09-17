@@ -1,6 +1,15 @@
 import { create } from 'zustand';
 import { MacroNutrients, HealthGrade } from '../types/nutrition';
 import { ScanType } from '../types/scan';
+import {
+  getScans,
+  insertScan,
+  deleteScan,
+  clearScans,
+  syncScanToSupabase,
+  ScanRecord,
+} from '../services/storage/database';
+import { useAuthStore } from './useAuthStore';
 
 export interface HistoryEntry {
   id: string;
@@ -18,12 +27,23 @@ export interface HistoryEntry {
   rawResult?: any;
 }
 
+export interface DailyMacroSummary {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  count: number;
+  averageScore: number;
+}
+
 interface ScanHistoryState {
   entries: HistoryEntry[];
   searchQuery: string;
   activeFilter: 'ALL' | 'PACKAGED' | 'LIVE_FOOD' | 'WARNINGS';
+  isInitialized: boolean;
 
   // Actions
+  fetchScans: () => Promise<void>;
   addEntry: (entry: HistoryEntry) => void;
   removeEntry: (id: string) => void;
   clearHistory: () => void;
@@ -31,10 +51,28 @@ interface ScanHistoryState {
   setActiveFilter: (filter: 'ALL' | 'PACKAGED' | 'LIVE_FOOD' | 'WARNINGS') => void;
 
   // Computed helper getters
-  getFilteredEntries: () => HistoryEntry[];
+  getFilteredEntries: (selectedDate?: string) => HistoryEntry[];
   getTodayCalories: () => number;
   getTodayProtein: () => number;
   getAverageScore: () => number;
+  getDailySummary: (dateString: string) => DailyMacroSummary;
+  getDatesWithEntries: () => Record<string, boolean>;
+}
+
+function getGradeFromScore(score: number): HealthGrade {
+  if (score >= 80) return 'A';
+  if (score >= 65) return 'B';
+  if (score >= 50) return 'C';
+  if (score >= 35) return 'D';
+  return 'F';
+}
+
+export function formatDateToKey(timestamp: number | Date): string {
+  const d = new Date(timestamp);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 const SEED_ENTRIES: HistoryEntry[] = [
@@ -111,28 +149,120 @@ export const useScanHistoryStore = create<ScanHistoryState>((set, get) => ({
   entries: SEED_ENTRIES,
   searchQuery: '',
   activeFilter: 'ALL',
+  isInitialized: false,
 
-  addEntry: (entry) =>
+  fetchScans: async () => {
+    try {
+      const dbScans = await getScans();
+      if (dbScans && dbScans.length > 0) {
+        const loadedEntries: HistoryEntry[] = dbScans.map((row) => ({
+          id: row.id,
+          timestamp: new Date(row.created_at).getTime(),
+          foodName: row.food_name,
+          scanType: (row.food_name.includes('Prepared') ? 'LIVE_FOOD' : 'PACKAGED') as ScanType,
+          healthGrade: getGradeFromScore(row.health_rating),
+          healthScore: Math.round(row.health_rating),
+          macros: {
+            calories: row.calories,
+            protein: row.protein,
+            carbohydrates: row.carbs,
+            sugars: 0,
+            fat: row.fat,
+            saturatedFat: 0,
+            fiber: 0,
+            sodium: 0,
+          },
+          flaggedAdditives: [],
+          allergenAlerts: [],
+          imageUri: row.image_uri || undefined,
+        }));
+
+        set((state) => {
+          const entryMap = new Map<string, HistoryEntry>();
+          // DB scans take precedence
+          loadedEntries.forEach((e) => entryMap.set(e.id, e));
+          // Keep existing or seed entries if not in DB
+          state.entries.forEach((e) => {
+            if (!entryMap.has(e.id)) {
+              entryMap.set(e.id, e);
+            }
+          });
+
+          return {
+            entries: Array.from(entryMap.values()).sort((a, b) => b.timestamp - a.timestamp),
+            isInitialized: true,
+          };
+        });
+      } else {
+        set({ isInitialized: true });
+      }
+    } catch (err) {
+      console.warn('[ScanHistoryStore] fetchScans error:', err);
+      set({ isInitialized: true });
+    }
+  },
+
+  addEntry: (entry) => {
     set((state) => ({
       entries: [entry, ...state.entries.filter((e) => e.id !== entry.id)],
-    })),
+    }));
 
-  removeEntry: (id) =>
+    // Local SQLite persistence & background cloud sync
+    const currentUserId = useAuthStore.getState().user?.id || null;
+    const record: ScanRecord = {
+      id: entry.id,
+      user_id: currentUserId,
+      food_name: entry.foodName,
+      calories: entry.macros.calories || 0,
+      protein: entry.macros.protein || 0,
+      carbs: entry.macros.carbohydrates || 0,
+      fat: entry.macros.fat || 0,
+      nova_score: entry.healthScore >= 70 ? 1 : entry.healthScore >= 50 ? 2 : 4,
+      health_rating: entry.healthScore,
+      image_uri: entry.imageUri || null,
+      created_at: new Date(entry.timestamp).toISOString(),
+    };
+
+    insertScan(record).catch((err) =>
+      console.warn('[ScanHistoryStore] SQLite auto-insert error:', err)
+    );
+
+    syncScanToSupabase(record, currentUserId || undefined).catch((err) =>
+      console.warn('[ScanHistoryStore] Supabase background sync notice:', err)
+    );
+  },
+
+  removeEntry: (id) => {
     set((state) => ({
       entries: state.entries.filter((e) => e.id !== id),
-    })),
+    }));
+    deleteScan(id).catch((err) =>
+      console.warn('[ScanHistoryStore] SQLite delete error:', err)
+    );
+  },
 
-  clearHistory: () => set({ entries: [] }),
+  clearHistory: () => {
+    set({ entries: [] });
+    clearScans().catch((err) =>
+      console.warn('[ScanHistoryStore] SQLite clear error:', err)
+    );
+  },
 
   setSearchQuery: (query) => set({ searchQuery: query }),
 
   setActiveFilter: (filter) => set({ activeFilter: filter }),
 
-  getFilteredEntries: () => {
+  getFilteredEntries: (selectedDate?: string) => {
     const { entries, searchQuery, activeFilter } = get();
     const query = searchQuery.trim().toLowerCase();
 
     return entries.filter((item) => {
+      // Date filter (if selected)
+      if (selectedDate) {
+        const itemDate = formatDateToKey(item.timestamp);
+        if (itemDate !== selectedDate) return false;
+      }
+
       // Search filter
       const matchesSearch =
         query === '' ||
@@ -158,19 +288,13 @@ export const useScanHistoryStore = create<ScanHistoryState>((set, get) => ({
   },
 
   getTodayCalories: () => {
-    const { entries } = get();
-    const startOfToday = new Date().setHours(0, 0, 0, 0);
-    return entries
-      .filter((e) => e.timestamp >= startOfToday)
-      .reduce((sum, e) => sum + (e.macros.calories || 0), 0);
+    const todayKey = formatDateToKey(Date.now());
+    return get().getDailySummary(todayKey).calories;
   },
 
   getTodayProtein: () => {
-    const { entries } = get();
-    const startOfToday = new Date().setHours(0, 0, 0, 0);
-    return entries
-      .filter((e) => e.timestamp >= startOfToday)
-      .reduce((sum, e) => sum + (e.macros.protein || 0), 0);
+    const todayKey = formatDateToKey(Date.now());
+    return get().getDailySummary(todayKey).protein;
   },
 
   getAverageScore: () => {
@@ -179,4 +303,54 @@ export const useScanHistoryStore = create<ScanHistoryState>((set, get) => ({
     const total = entries.reduce((sum, e) => sum + e.healthScore, 0);
     return Math.round(total / entries.length);
   },
+
+  getDailySummary: (dateString: string) => {
+    const { entries } = get();
+    const dayEntries = entries.filter((e) => formatDateToKey(e.timestamp) === dateString);
+
+    if (dayEntries.length === 0) {
+      return {
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        count: 0,
+        averageScore: 0,
+      };
+    }
+
+    const totals = dayEntries.reduce(
+      (acc, item) => {
+        acc.calories += Math.round(item.macros.calories || 0);
+        acc.protein += Math.round(item.macros.protein || 0);
+        acc.carbs += Math.round(item.macros.carbohydrates || 0);
+        acc.fat += Math.round(item.macros.fat || 0);
+        acc.totalScore += item.healthScore;
+        return acc;
+      },
+      { calories: 0, protein: 0, carbs: 0, fat: 0, totalScore: 0 }
+    );
+
+    return {
+      calories: totals.calories,
+      protein: totals.protein,
+      carbs: totals.carbs,
+      fat: totals.fat,
+      count: dayEntries.length,
+      averageScore: Math.round(totals.totalScore / dayEntries.length),
+    };
+  },
+
+  getDatesWithEntries: () => {
+    const { entries } = get();
+    const map: Record<string, boolean> = {};
+    entries.forEach((e) => {
+      const key = formatDateToKey(e.timestamp);
+      map[key] = true;
+    });
+    return map;
+  },
 }));
+
+// Automatically fetch stored scans on store initialization
+useScanHistoryStore.getState().fetchScans();

@@ -42,10 +42,12 @@ interface ProfileState {
   activeDietaryModes: Record<string, boolean>;
   mascotVoiceEnabled: boolean;
   hapticsEnabled: boolean;
+  avatarUrl: string | null;
 
   // Actions
   setUserName: (name: string) => void;
   setUserTag: (tag: string) => void;
+  setAvatarUrl: (url: string | null) => void;
   toggleAllergen: (allergen: string) => void;
   toggleDietaryMode: (mode: string) => void;
   setGoals: (newGoals: Partial<UserGoals>) => void;
@@ -89,9 +91,11 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   },
   mascotVoiceEnabled: true,
   hapticsEnabled: true,
+  avatarUrl: null,
 
   setUserName: (name) => set({ userName: name }),
   setUserTag: (tag) => set({ userTag: tag }),
+  setAvatarUrl: (url) => set({ avatarUrl: url }),
 
 
   toggleAllergen: (allergen) =>

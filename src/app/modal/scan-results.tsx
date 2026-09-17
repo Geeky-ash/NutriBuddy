@@ -79,8 +79,8 @@ export default function ScanResultsModal() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     addHistoryEntry({
-      id: `log-${Date.now()}`,
-      timestamp: Date.now(),
+      id: (item as any).id || `log-${Date.now()}`,
+      timestamp: (item as any).createdAt || Date.now(),
       foodName: name,
       brand,
       scanType: isLiveScan ? 'LIVE_FOOD' : 'PACKAGED',

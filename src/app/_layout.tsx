@@ -75,6 +75,14 @@ export default function RootLayout() {
               headerShown: false,
             }}
           />
+          <Stack.Screen
+            name="modal/search-food"
+            options={{
+              presentation: 'modal',
+              animation: 'slide_from_bottom',
+              headerShown: false,
+            }}
+          />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

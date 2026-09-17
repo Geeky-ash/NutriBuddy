@@ -38,7 +38,8 @@
         {
           "cameraPermission": "Allow NutriBuddy to access your camera to scan packaged products and live meals."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

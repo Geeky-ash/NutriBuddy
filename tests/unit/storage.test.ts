@@ -154,4 +154,75 @@ describe('useScanHistoryStore', () => {
     useScanHistoryStore.getState().removeEntry('removable-1');
     expect(useScanHistoryStore.getState().entries).toHaveLength(0);
   });
+
+  it('calculates daily macro summary and filters by date correctly', () => {
+    const targetDate = '2026-09-17';
+    const timestampOnDate = new Date('2026-09-17T12:00:00Z').getTime();
+    const timestampOtherDate = new Date('2026-09-16T12:00:00Z').getTime();
+
+    const meal1: HistoryEntry = {
+      id: 'day-meal-1',
+      timestamp: timestampOnDate,
+      foodName: 'Oatmeal & Berries',
+      scanType: 'LIVE_FOOD',
+      healthGrade: 'A',
+      healthScore: 92,
+      macros: { calories: 350, protein: 12, carbohydrates: 58, sugars: 14, fat: 6, saturatedFat: 1, fiber: 8, sodium: 80 },
+      flaggedAdditives: [],
+      allergenAlerts: [],
+    };
+
+    const meal2: HistoryEntry = {
+      id: 'day-meal-2',
+      timestamp: timestampOnDate,
+      foodName: 'Grilled Chicken Salad',
+      scanType: 'LIVE_FOOD',
+      healthGrade: 'A',
+      healthScore: 94,
+      macros: { calories: 420, protein: 45, carbohydrates: 15, sugars: 4, fat: 18, saturatedFat: 3, fiber: 5, sodium: 290 },
+      flaggedAdditives: [],
+      allergenAlerts: [],
+    };
+
+    const mealOther: HistoryEntry = {
+      id: 'other-meal',
+      timestamp: timestampOtherDate,
+      foodName: 'Yesterday Snack',
+      scanType: 'PACKAGED',
+      healthGrade: 'B',
+      healthScore: 70,
+      macros: { calories: 200, protein: 5, carbohydrates: 25, sugars: 10, fat: 8, saturatedFat: 2, fiber: 2, sodium: 150 },
+      flaggedAdditives: [],
+      allergenAlerts: [],
+    };
+
+    useScanHistoryStore.getState().addEntry(meal1);
+    useScanHistoryStore.getState().addEntry(meal2);
+    useScanHistoryStore.getState().addEntry(mealOther);
+
+    // Compute summary for targetDate
+    const summary = useScanHistoryStore.getState().getDailySummary(targetDate);
+    expect(summary.count).toBe(2);
+    expect(summary.calories).toBe(770);
+    expect(summary.protein).toBe(57);
+    expect(summary.carbs).toBe(73);
+    expect(summary.fat).toBe(24);
+    expect(summary.averageScore).toBe(93);
+
+    // Filter items for targetDate
+    const itemsOnDate = useScanHistoryStore.getState().getFilteredEntries(targetDate);
+    expect(itemsOnDate).toHaveLength(2);
+    expect(itemsOnDate.map((m) => m.id)).toContain('day-meal-1');
+    expect(itemsOnDate.map((m) => m.id)).toContain('day-meal-2');
+
+    // Filter items for yesterday
+    const itemsYesterday = useScanHistoryStore.getState().getFilteredEntries('2026-09-16');
+    expect(itemsYesterday).toHaveLength(1);
+    expect(itemsYesterday[0].id).toBe('other-meal');
+  });
+
+  it('runs fetchScans without error to load stored scans into memory', async () => {
+    await expect(useScanHistoryStore.getState().fetchScans()).resolves.toBeUndefined();
+    expect(useScanHistoryStore.getState().isInitialized).toBe(true);
+  });
 });

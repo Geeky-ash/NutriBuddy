@@ -45,7 +45,8 @@ export default function ProfileScreen() {
   const setMascotVoiceEnabled = useProfileStore((state) => state.setMascotVoiceEnabled);
 
   const selectedAllergenCount = Object.values(activeAllergens).filter(Boolean).length;
-  const avatarUrl = profile?.avatar_url;
+  const localAvatarUrl = useProfileStore((state) => state.avatarUrl);
+  const avatarUrl = profile?.avatar_url || localAvatarUrl;
 
   const handleToggleAllergen = (name: string) => {
     safeHaptics.impact(Haptics.ImpactFeedbackStyle.Light);

@@ -1,5 +1,7 @@
 import { ScannedProduct, LiveMealScanResult } from './nutrition';
 
+export type { ScannedProduct, LiveMealScanResult };
+
 export type ScanType = 'PACKAGED' | 'LIVE_FOOD';
 
 export type ProcessingStatus = 'IDLE' | 'SCANNING' | 'SUCCESS' | 'ERROR';
