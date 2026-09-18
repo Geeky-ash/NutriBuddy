@@ -16,9 +16,10 @@ import {
   Search,
   X,
   Plus,
+  Minus,
   Sparkles,
   Utensils,
-  ChevronRight,
+  ChevronDown,
   Flame,
   Check,
 } from 'lucide-react-native';
@@ -29,6 +30,8 @@ import {
   searchFoodItems,
   estimateFoodNutritionWithAi,
   formatDisplayName,
+  getBaseWeight,
+  getBaselineTag,
 } from '../../services/ai/foodSearchService';
 import { useScanHistoryStore, HistoryEntry } from '../../store/useScanHistoryStore';
 import { useMascotStore } from '../../store/useMascotStore';
@@ -50,6 +53,12 @@ export default function SearchFoodModal() {
   // Always initialize active category to 'ALL' upon opening
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
 
+  // Selected food & portion quantity state
+  const [selectedFoodId, setSelectedFoodId] = useState<string | null>(null);
+  const [quantity, setQuantity] = useState<number>(1);
+  const [isEditingQty, setIsEditingQty] = useState(false);
+  const [qtyInputText, setQtyInputText] = useState('1');
+
   // AI Fallback state
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiEstimatedItem, setAiEstimatedItem] = useState<FoodSearchItem | null>(null);
@@ -58,6 +67,7 @@ export default function SearchFoodModal() {
   // Success feedback state
   const [loggedItemId, setLoggedItemId] = useState<string | null>(null);
 
+  const addScanLog = useScanHistoryStore((state) => state.addScanLog);
   const addHistoryEntry = useScanHistoryStore((state) => state.addEntry);
   const triggerReactivity = useMascotStore((state) => state.triggerReactivityForScore);
 
@@ -65,6 +75,20 @@ export default function SearchFoodModal() {
   useEffect(() => {
     setActiveCategory('ALL');
   }, []);
+
+  // Filtered list: forces ALL category if search query is present
+  const results = useMemo(() => {
+    return searchFoodItems(searchQuery, activeCategory, searchQuery.trim().length > 0);
+  }, [searchQuery, activeCategory]);
+
+  // When search query yields exact or single match, auto-select if nothing selected yet
+  useEffect(() => {
+    if (results.length === 1 && searchQuery.trim().length >= 3 && !selectedFoodId) {
+      setSelectedFoodId(results[0].id);
+      setQuantity(1);
+      setQtyInputText('1');
+    }
+  }, [results, searchQuery, selectedFoodId]);
 
   // When user types in search bar, ALWAYS force active filter category to 'ALL'
   const handleQueryChange = (text: string) => {
@@ -107,29 +131,85 @@ export default function SearchFoodModal() {
     }
   };
 
-  // Filtered list: forces ALL category if search query is present
-  const results = useMemo(() => {
-    return searchFoodItems(searchQuery, activeCategory, searchQuery.trim().length > 0);
-  }, [searchQuery, activeCategory]);
+  const handleSelectFood = (item: FoodSearchItem) => {
+    Haptics.selectionAsync();
+    if (selectedFoodId === item.id) {
+      // Toggle collapse
+      setSelectedFoodId(null);
+    } else {
+      setSelectedFoodId(item.id);
+      setQuantity(1);
+      setQtyInputText('1');
+      setIsEditingQty(false);
+    }
+  };
 
-  const handleLogItem = (item: FoodSearchItem) => {
+  const handleStepChange = (delta: number) => {
+    Haptics.selectionAsync();
+    setQuantity((prev) => {
+      let next: number;
+      if (delta > 0) {
+        next = prev < 1 ? prev + 0.5 : prev + 1;
+      } else {
+        next = prev <= 1 ? Math.max(0.5, prev - 0.5) : prev - 1;
+      }
+      const rounded = Math.round(next * 10) / 10;
+      setQtyInputText(String(rounded));
+      return rounded;
+    });
+  };
+
+  const formatQuantityLabel = (item: FoodSearchItem, qty: number): string => {
+    const baseGram = getBaseWeight(item);
+    const totalGrams = Math.round(baseGram * qty);
+    const lowerServing = (item.servingSize || '').toLowerCase();
+
+    if (lowerServing.includes('piece')) {
+      return `${qty} ${qty === 1 ? 'piece' : 'pieces'} (${totalGrams}g)`;
+    }
+    if (lowerServing.includes('roti')) {
+      return `${qty} ${qty === 1 ? 'roti' : 'rotis'} (${totalGrams}g)`;
+    }
+    if (lowerServing.includes('slice')) {
+      return `${qty} ${qty === 1 ? 'slice' : 'slices'} (${totalGrams}g)`;
+    }
+    if (lowerServing.includes('egg')) {
+      return `${qty} ${qty === 1 ? 'egg' : 'eggs'} (${totalGrams}g)`;
+    }
+    if (qty === 1) {
+      return `${totalGrams}g`;
+    }
+    return `${qty}x (${totalGrams}g)`;
+  };
+
+  const handleLogItem = (item: FoodSearchItem, qtyMultiplier: number = quantity) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setLoggedItemId(item.id);
+
+    // Live nutrition scaling per multiplier
+    const scaledCalories = Math.round(item.calories * qtyMultiplier);
+    const scaledProtein = Math.round(item.protein * qtyMultiplier * 10) / 10;
+    const scaledCarbs = Math.round(item.carbs * qtyMultiplier * 10) / 10;
+    const scaledFat = Math.round(item.fat * qtyMultiplier * 10) / 10;
+    const baseGrams = getBaseWeight(item);
+    const totalGrams = Math.round(baseGrams * qtyMultiplier);
+    const portionText = `${qtyMultiplier}x (${totalGrams}g)`;
+    const displayName = formatDisplayName(item.name);
 
     const historyEntry: HistoryEntry = {
       id: `manual-${Date.now()}`,
       timestamp: Date.now(),
-      foodName: formatDisplayName(item.name),
+      foodName: qtyMultiplier === 1 ? displayName : `${displayName} (${qtyMultiplier}x)`,
       brand: item.isAiGenerated ? 'AI Estimated' : item.category,
       scanType: 'LIVE_FOOD',
       healthGrade: item.grade,
       healthScore: item.healthScore,
       macros: {
-        calories: item.calories,
-        protein: item.protein,
-        carbohydrates: item.carbs,
+        calories: scaledCalories,
+        protein: scaledProtein,
+        carbohydrates: scaledCarbs,
         sugars: 0,
-        fat: item.fat,
+        fat: scaledFat,
         saturatedFat: 0,
         fiber: 0,
         sodium: 0,
@@ -137,11 +217,16 @@ export default function SearchFoodModal() {
       flaggedAdditives: [],
       allergenAlerts: [],
       actionableTips: [
-        `Standard serving: ${item.servingSize}. Contains ${item.calories} kcal, ${item.protein}g protein.`,
+        `Standard base: 100g (${item.calories} kcal). Scaled portion: ${portionText} containing ${scaledCalories} kcal, ${scaledProtein}g protein, ${scaledCarbs}g carbs, ${scaledFat}g fat.`,
       ],
     };
 
-    addHistoryEntry(historyEntry);
+    // Commit to SQLite and Supabase through unified store action
+    if (addScanLog) {
+      addScanLog(historyEntry);
+    } else {
+      addHistoryEntry(historyEntry);
+    }
     triggerReactivity(item.healthScore, []);
 
     // Dismiss modal after brief confirmation
@@ -194,7 +279,7 @@ export default function SearchFoodModal() {
           <Search size={18} color={colors.brand.primary} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search food (e.g. Poha, Paneer Tikka, Idli)..."
+            placeholder="Search food (e.g. Moong Dal Chila, Poha, Idli)..."
             placeholderTextColor={colors.text.muted}
             value={searchQuery}
             onChangeText={handleQueryChange}
@@ -283,43 +368,160 @@ export default function SearchFoodModal() {
               </Text>
             </View>
 
-            <Text style={styles.aiFoodName}>{aiEstimatedItem.name}</Text>
+            <Text style={styles.aiFoodName}>
+              {aiEstimatedItem.name}
+            </Text>
 
-            {/* Macro Row */}
-            <View style={styles.aiMacroRow}>
-              <View style={styles.aiMacroPill}>
-                <Flame size={12} color={colors.brand.amber} />
-                <Text style={styles.aiMacroText}>{aiEstimatedItem.calories} kcal</Text>
-              </View>
-              <View style={styles.aiMacroPill}>
-                <Text style={styles.aiMacroText}>🥩 {aiEstimatedItem.protein}g protein</Text>
-              </View>
-              <View style={styles.aiMacroPill}>
-                <Text style={styles.aiMacroText}>🌾 {aiEstimatedItem.carbs}g carbs</Text>
-              </View>
-              <View style={styles.aiMacroPill}>
-                <Text style={styles.aiMacroText}>🥑 {aiEstimatedItem.fat}g fat</Text>
+            {/* Baseline Tag above macros */}
+            <View style={styles.baselineTagContainer}>
+              <View style={styles.baselineTagBadge}>
+                <Text style={styles.baselineTagText}>{getBaselineTag(aiEstimatedItem)}</Text>
               </View>
             </View>
 
+            {/* Live Scaled Macro Row */}
+            <View style={styles.macroPillsRow}>
+              <View style={styles.macroPill}>
+                <Flame size={12} color="#F59E0B" />
+                <Text style={styles.macroPillText}>
+                  {Math.round(aiEstimatedItem.calories * quantity)} kcal
+                </Text>
+              </View>
+              <View style={styles.macroPill}>
+                <Text style={styles.macroPillText}>
+                  🥩 {Math.round(aiEstimatedItem.protein * quantity * 10) / 10}g protein
+                </Text>
+              </View>
+              <View style={styles.macroPill}>
+                <Text style={styles.macroPillText}>
+                  🌾 {Math.round(aiEstimatedItem.carbs * quantity * 10) / 10}g carbs
+                </Text>
+              </View>
+              <View style={styles.macroPill}>
+                <Text style={styles.macroPillText}>
+                  🥑 {Math.round(aiEstimatedItem.fat * quantity * 10) / 10}g fat
+                </Text>
+              </View>
+            </View>
+
+            {/* Interactive Quantity Stepper */}
+            <View style={styles.stepperContainer}>
+              <View style={styles.stepperRow}>
+                <TouchableOpacity
+                  style={[styles.stepBtn, quantity <= 0.5 && styles.stepBtnDisabled]}
+                  onPress={() => handleStepChange(-1)}
+                  disabled={quantity <= 0.5}
+                  activeOpacity={0.7}
+                >
+                  <Minus size={16} color={quantity <= 0.5 ? '#94A3B8' : '#0F172A'} />
+                </TouchableOpacity>
+
+                {/* Single clean quantity string display */}
+                <TouchableOpacity
+                  style={styles.quantityDisplayBox}
+                  onPress={() => setIsEditingQty(true)}
+                  activeOpacity={0.8}
+                >
+                  {isEditingQty ? (
+                    <View style={styles.quantityEditingRow}>
+                      <TextInput
+                        style={styles.quantityNumericInput}
+                        value={qtyInputText}
+                        keyboardType="decimal-pad"
+                        autoFocus
+                        selectTextOnFocus
+                        onChangeText={(text) => {
+                          setQtyInputText(text);
+                          const parsed = parseFloat(text);
+                          if (!isNaN(parsed) && parsed > 0 && parsed <= 50) {
+                            setQuantity(Math.round(parsed * 10) / 10);
+                          }
+                        }}
+                        onBlur={() => {
+                          setIsEditingQty(false);
+                          const parsed = parseFloat(qtyInputText);
+                          if (isNaN(parsed) || parsed <= 0) {
+                            setQuantity(1);
+                            setQtyInputText('1');
+                          } else {
+                            const clamped = Math.min(50, Math.max(0.5, Math.round(parsed * 10) / 10));
+                            setQuantity(clamped);
+                            setQtyInputText(String(clamped));
+                          }
+                        }}
+                        onSubmitEditing={() => setIsEditingQty(false)}
+                      />
+                      <Text style={styles.quantityEditingSuffix}>x multiplier</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.quantityCleanText}>
+                      {formatQuantityLabel(aiEstimatedItem, quantity)}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.stepBtn}
+                  onPress={() => handleStepChange(1)}
+                  activeOpacity={0.7}
+                >
+                  <Plus size={16} color="#0F172A" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Quick Step Chips */}
+              <View style={styles.quickStepChipsRow}>
+                {[0.5, 1, 2, 3].map((preset) => {
+                  const isPresetActive = quantity === preset;
+                  const gramLabel = Math.round(getBaseWeight(aiEstimatedItem) * preset);
+                  return (
+                    <TouchableOpacity
+                      key={preset}
+                      style={[
+                        styles.quickStepChip,
+                        isPresetActive && styles.quickStepChipActive,
+                      ]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setQuantity(preset);
+                        setQtyInputText(String(preset));
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.quickStepChipText,
+                          isPresetActive && styles.quickStepChipTextActive,
+                        ]}
+                      >
+                        {preset}x ({gramLabel}g)
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Simplified Clean Primary Action Button */}
             <TouchableOpacity
               style={[
                 styles.logButtonLarge,
                 loggedItemId === aiEstimatedItem.id && styles.logButtonSuccess,
               ]}
-              onPress={() => handleLogItem(aiEstimatedItem)}
+              onPress={() => handleLogItem(aiEstimatedItem, quantity)}
               activeOpacity={0.8}
             >
               {loggedItemId === aiEstimatedItem.id ? (
                 <>
                   <Check size={18} color="#fff" />
-                  <Text style={styles.logButtonLargeText}>Logged to Diary!</Text>
+                  <Text style={styles.logButtonLargeText}>
+                    Added to Diary!
+                  </Text>
                 </>
               ) : (
-                <>
-                  <Plus size={18} color="#fff" />
-                  <Text style={styles.logButtonLargeText}>Log this to Today's Diary</Text>
-                </>
+                <Text style={styles.logButtonLargeText}>
+                  + Add
+                </Text>
               )}
             </TouchableOpacity>
           </View>
@@ -329,12 +531,211 @@ export default function SearchFoodModal() {
         {results.length > 0 ? (
           <View style={styles.resultsList}>
             {results.map((item) => {
+              const isSelected = selectedFoodId === item.id;
               const badge = getScoreBadgeColor(item.grade);
               const isLogged = loggedItemId === item.id;
               const displayName = formatDisplayName(item.name);
 
+              const itemQty = isSelected ? quantity : 1;
+              const scaledCalories = Math.round(item.calories * itemQty);
+              const scaledProtein = Math.round(item.protein * itemQty * 10) / 10;
+              const scaledCarbs = Math.round(item.carbs * itemQty * 10) / 10;
+              const scaledFat = Math.round(item.fat * itemQty * 10) / 10;
+
+              if (isSelected) {
+                return (
+                  <View key={item.id} style={styles.selectedFoodCard}>
+                    {/* Card Header */}
+                    <TouchableOpacity
+                      style={styles.selectedCardHeader}
+                      onPress={() => handleSelectFood(item)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.foodCardLeft}>
+                        <View style={styles.foodIconCircleActive}>
+                          <Utensils size={18} color="#059669" />
+                        </View>
+                        <View style={styles.foodDetails}>
+                          <Text
+                            style={styles.selectedFoodName}
+                            numberOfLines={1}
+                            ellipsizeMode="tail"
+                          >
+                            {displayName}
+                          </Text>
+                          <Text style={styles.foodSubtitle} numberOfLines={1} ellipsizeMode="tail">
+                            {item.category} · {item.servingSize}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.foodCardRight}>
+                        <View style={[styles.scorePill, { backgroundColor: badge.bg }]}>
+                          <Text style={[styles.scorePillText, { color: badge.text }]}>
+                            {item.healthScore}
+                          </Text>
+                        </View>
+                        <ChevronDown size={18} color={colors.text.secondary} />
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Secondary Baseline Tag above macros */}
+                    <View style={styles.baselineTagContainer}>
+                      <View style={styles.baselineTagBadge}>
+                        <Text style={styles.baselineTagText}>{getBaselineTag(item)}</Text>
+                      </View>
+                    </View>
+
+                    {/* Live Scaled Macro Row */}
+                    <View style={styles.macroPillsRow}>
+                      <View style={styles.macroPill}>
+                        <Flame size={12} color="#F59E0B" />
+                        <Text style={styles.macroPillText}>{scaledCalories} kcal</Text>
+                      </View>
+                      <View style={styles.macroPill}>
+                        <Text style={styles.macroPillText}>🥩 {scaledProtein}g protein</Text>
+                      </View>
+                      <View style={styles.macroPill}>
+                        <Text style={styles.macroPillText}>🌾 {scaledCarbs}g carbs</Text>
+                      </View>
+                      <View style={styles.macroPill}>
+                        <Text style={styles.macroPillText}>🥑 {scaledFat}g fat</Text>
+                      </View>
+                    </View>
+
+                    {/* Interactive Portion Quantity Stepper Row */}
+                    <View style={styles.stepperContainer}>
+                      <View style={styles.stepperRow}>
+                        {/* Decrement Button (-) */}
+                        <TouchableOpacity
+                          style={[styles.stepBtn, quantity <= 0.5 && styles.stepBtnDisabled]}
+                          onPress={() => handleStepChange(-1)}
+                          disabled={quantity <= 0.5}
+                          activeOpacity={0.7}
+                        >
+                          <Minus size={16} color={quantity <= 0.5 ? '#94A3B8' : '#0F172A'} />
+                        </TouchableOpacity>
+
+                        {/* Single clean quantity string display */}
+                        <TouchableOpacity
+                          style={styles.quantityDisplayBox}
+                          onPress={() => setIsEditingQty(true)}
+                          activeOpacity={0.8}
+                        >
+                          {isEditingQty ? (
+                            <View style={styles.quantityEditingRow}>
+                              <TextInput
+                                style={styles.quantityNumericInput}
+                                value={qtyInputText}
+                                keyboardType="decimal-pad"
+                                autoFocus
+                                selectTextOnFocus
+                                onChangeText={(text) => {
+                                  setQtyInputText(text);
+                                  const parsed = parseFloat(text);
+                                  if (!isNaN(parsed) && parsed > 0 && parsed <= 50) {
+                                    setQuantity(Math.round(parsed * 10) / 10);
+                                  }
+                                }}
+                                onBlur={() => {
+                                  setIsEditingQty(false);
+                                  const parsed = parseFloat(qtyInputText);
+                                  if (isNaN(parsed) || parsed <= 0) {
+                                    setQuantity(1);
+                                    setQtyInputText('1');
+                                  } else {
+                                    const clamped = Math.min(50, Math.max(0.5, Math.round(parsed * 10) / 10));
+                                    setQuantity(clamped);
+                                    setQtyInputText(String(clamped));
+                                  }
+                                }}
+                                onSubmitEditing={() => setIsEditingQty(false)}
+                              />
+                              <Text style={styles.quantityEditingSuffix}>x multiplier</Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.quantityCleanText}>
+                              {formatQuantityLabel(item, quantity)}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+
+                        {/* Increment Button (+) */}
+                        <TouchableOpacity
+                          style={styles.stepBtn}
+                          onPress={() => handleStepChange(1)}
+                          activeOpacity={0.7}
+                        >
+                          <Plus size={16} color="#0F172A" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Quick Step Preset Chips */}
+                      <View style={styles.quickStepChipsRow}>
+                        {[0.5, 1, 2, 3].map((preset) => {
+                          const isPresetActive = quantity === preset;
+                          const gramLabel = Math.round(getBaseWeight(item) * preset);
+                          return (
+                            <TouchableOpacity
+                              key={preset}
+                              style={[
+                                styles.quickStepChip,
+                                isPresetActive && styles.quickStepChipActive,
+                              ]}
+                              onPress={() => {
+                                Haptics.selectionAsync();
+                                setQuantity(preset);
+                                setQtyInputText(String(preset));
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <Text
+                                style={[
+                                  styles.quickStepChipText,
+                                  isPresetActive && styles.quickStepChipTextActive,
+                                ]}
+                              >
+                                {preset}x ({gramLabel}g)
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    {/* Simplified Clean Primary Action Button */}
+                    <TouchableOpacity
+                      style={[
+                        styles.logButtonLarge,
+                        isLogged && styles.logButtonSuccess,
+                      ]}
+                      onPress={() => handleLogItem(item, quantity)}
+                      activeOpacity={0.8}
+                    >
+                      {isLogged ? (
+                        <>
+                          <Check size={18} color="#fff" />
+                          <Text style={styles.logButtonLargeText}>
+                            Added to Diary!
+                          </Text>
+                        </>
+                      ) : (
+                        <Text style={styles.logButtonLargeText}>
+                          + Add
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
+
               return (
-                <View key={item.id} style={styles.foodCard}>
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.foodCard}
+                  onPress={() => handleSelectFood(item)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.foodCardLeft}>
                     <View style={styles.foodIconCircle}>
                       <Utensils size={18} color={colors.brand.primaryDark} />
@@ -352,7 +753,7 @@ export default function SearchFoodModal() {
                         numberOfLines={1}
                         ellipsizeMode="tail"
                       >
-                        {item.calories} Cal, {item.servingSize}
+                        {item.calories} Cal · Base: 100g
                       </Text>
                     </View>
                   </View>
@@ -364,22 +765,12 @@ export default function SearchFoodModal() {
                       </Text>
                     </View>
 
-                    <TouchableOpacity
-                      style={[styles.quickLogBtn, isLogged && styles.quickLogBtnSuccess]}
-                      onPress={() => handleLogItem(item)}
-                      activeOpacity={0.7}
-                    >
-                      {isLogged ? (
-                        <Check size={15} color={colors.surface.card} />
-                      ) : (
-                        <>
-                          <Plus size={14} color={colors.brand.primaryDark} />
-                          <Text style={styles.quickLogText}>Log</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
+                    <View style={styles.quickLogBtn}>
+                      <Plus size={14} color={colors.brand.primaryDark} />
+                      <Text style={styles.quickLogText}>Portion</Text>
+                    </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -578,31 +969,147 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   aiFoodName: {
-    ...typography.headingMedium,
     fontSize: 18,
-    color: colors.text.primary,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  baselineTagContainer: {
     marginBottom: 8,
   },
-  aiMacroRow: {
+  baselineTagBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#F1F5F9',
+    borderRadius: radii.xs,
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  baselineTagText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  macroPillsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
     marginBottom: spacing.md,
   },
-  aiMacroPill: {
+  macroPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface.card,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 9,
     borderRadius: radii.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     gap: 4,
   },
-  aiMacroText: {
+  macroPillText: {
     ...typography.caption,
-    fontWeight: '600',
+    fontWeight: '700',
     color: colors.text.primary,
     fontSize: 12,
+  },
+  stepperContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: radii.lg,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 8,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  stepBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.soft,
+  },
+  stepBtnDisabled: {
+    opacity: 0.4,
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  quantityDisplayBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  quantityCleanText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  quantityEditingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  quantityNumericInput: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+    minWidth: 32,
+    textAlign: 'center',
+    padding: 0,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#10B981',
+  },
+  quantityEditingSuffix: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  quickStepChipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  quickStepChip: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: radii.sm,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickStepChipActive: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  quickStepChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  quickStepChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   logButtonLarge: {
     flexDirection: 'row',
@@ -610,20 +1117,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.brand.primary,
     borderRadius: radii.full,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     gap: 6,
+    ...shadows.soft,
   },
   logButtonSuccess: {
     backgroundColor: '#059669',
   },
   logButtonLargeText: {
-    ...typography.labelBold,
-    color: colors.surface.card,
-    fontSize: 14,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 16,
+    textAlign: 'center',
   },
   resultsList: {
     gap: 10,
     marginTop: 4,
+  },
+  selectedFoodCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: radii.xl,
+    padding: spacing.md,
+    borderWidth: 1.5,
+    borderColor: '#10B981',
+    ...shadows.card,
+  },
+  selectedCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  selectedFoodName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   foodCard: {
     flexDirection: 'row',
@@ -651,13 +1180,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.sm,
   },
+  foodIconCircleActive: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
   foodDetails: {
     flex: 1,
   },
   foodName: {
-    ...typography.labelBold,
-    fontSize: 14,
-    color: colors.text.primary,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   foodSubtitle: {
     ...typography.caption,
@@ -687,9 +1225,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: radii.full,
     gap: 3,
-  },
-  quickLogBtnSuccess: {
-    backgroundColor: '#059669',
   },
   quickLogText: {
     ...typography.labelBold,

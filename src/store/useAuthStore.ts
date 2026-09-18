@@ -4,6 +4,7 @@ import { supabase, UserProfile, uploadAvatarToStorage } from '../services/supaba
 import { useProfileStore } from './useProfileStore';
 import { ENV } from '../config/env';
 import { getAuthRedirectUri, openAuthSession, parseAuthUrlParams } from '../utils/safeAuthSession';
+import { saveUserProfileLocal, UserProfileRecord } from '../services/storage/database';
 
 export interface AuthState {
   user: User | null;
@@ -658,6 +659,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     }
 
+    // 1. Local SQLite transaction first
+    const localProfileRecord: UserProfileRecord = {
+      id: updatedProfile.id,
+      full_name: updatedProfile.full_name || '',
+      gender: updatedProfile.gender || 'Male',
+      height_cm: updatedProfile.height_cm || 175,
+      weight_kg: updatedProfile.weight_kg || 63,
+      birth_date: updatedProfile.birth_date || 'Jan 2, 2005',
+      avatar_url: updatedProfile.avatar_url || null,
+      updated_at: updatedProfile.updated_at || new Date().toISOString(),
+    };
+    saveUserProfileLocal(localProfileRecord).catch((err) =>
+      console.warn('[AuthStore] SQLite saveUserProfileLocal error:', err)
+    );
+
+    // 2. Background Supabase cloud sync
     if (!ENV.HAS_SUPABASE || current.id === 'guest-user') {
       return { success: true };
     }

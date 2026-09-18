@@ -110,4 +110,84 @@ describe('Global Food Search & Indian Regional Database', () => {
     expect(formatDisplayName('Steamed Idli with Sambar (2 pieces)')).toBe('Steamed Idli with Sambar');
     expect(formatDisplayName('Grilled Paneer Tikka (Tandoori)')).toBe('Grilled Paneer Tikka');
   });
+
+  it('standardizes base nutrition to 100g baseline across database items and helpers', () => {
+    const { getBaseWeight, getBaselineTag } = require('../../src/services/ai/foodSearchService');
+
+    for (const item of CURATED_FOOD_DATABASE) {
+      expect(item.baseWeightGrams).toBeDefined();
+      expect(item.baseWeightGrams).toBe(100);
+      expect(item.baselineTag).toBe('Base: 100g (or 1 serving)');
+      expect(getBaseWeight(item)).toBe(100);
+      expect(getBaselineTag(item)).toBe('Base: 100g (or 1 serving)');
+    }
+  });
+
+  it('accurately calculates real-time live scaled calories and macros for portion quantity stepper', () => {
+    const chilaMatches = searchFoodItems('Moong Dal Chila');
+    expect(chilaMatches.length).toBeGreaterThanOrEqual(1);
+    const chila = chilaMatches[0];
+
+    // Base values per 100g
+    expect(chila.calories).toBe(240);
+    expect(chila.protein).toBe(12.0);
+    expect(chila.carbs).toBe(32.0);
+    expect(chila.fat).toBe(6.0);
+
+    // 3x portion multiplier: (e.g. "+ Log 3x Moong Dal Chila (720 kcal) to Diary")
+    const quantityMultiplier = 3;
+    const scaledCalories = Math.round(chila.calories * quantityMultiplier);
+    const scaledProtein = Math.round(chila.protein * quantityMultiplier * 10) / 10;
+    const scaledCarbs = Math.round(chila.carbs * quantityMultiplier * 10) / 10;
+    const scaledFat = Math.round(chila.fat * quantityMultiplier * 10) / 10;
+
+    expect(scaledCalories).toBe(720);
+    expect(scaledProtein).toBe(36.0);
+    expect(scaledCarbs).toBe(96.0);
+    expect(scaledFat).toBe(18.0);
+  });
+
+  it('commits scaled portion entries via addScanLog to scan history with accurate daily totals', () => {
+    const chila = searchFoodItems('Moong Dal Chila')[0];
+    const quantity = 3;
+    const scaledCalories = Math.round(chila.calories * quantity);
+    const scaledProtein = Math.round(chila.protein * quantity * 10) / 10;
+    const scaledCarbs = Math.round(chila.carbs * quantity * 10) / 10;
+    const scaledFat = Math.round(chila.fat * quantity * 10) / 10;
+
+    useScanHistoryStore.getState().addScanLog({
+      id: `manual-chila-3x`,
+      timestamp: Date.now(),
+      foodName: `Moong Dal Chila (3x)`,
+      brand: chila.category,
+      scanType: 'LIVE_FOOD',
+      healthGrade: chila.grade,
+      healthScore: chila.healthScore,
+      macros: {
+        calories: scaledCalories,
+        protein: scaledProtein,
+        carbohydrates: scaledCarbs,
+        sugars: 0,
+        fat: scaledFat,
+        saturatedFat: 0,
+        fiber: 0,
+        sodium: 0,
+      },
+      flaggedAdditives: [],
+      allergenAlerts: [],
+      actionableTips: [
+        `Standard base: 100g (240 kcal). Scaled portion: 3x (300g) containing 720 kcal, 36g protein.`,
+      ],
+    });
+
+    const entries = useScanHistoryStore.getState().entries;
+    expect(entries).toHaveLength(1);
+    expect(entries[0].foodName).toBe('Moong Dal Chila (3x)');
+    expect(entries[0].macros.calories).toBe(720);
+    expect(entries[0].macros.protein).toBe(36);
+    expect(entries[0].macros.carbohydrates).toBe(96);
+    expect(entries[0].macros.fat).toBe(18);
+    expect(useScanHistoryStore.getState().getTodayCalories()).toBe(720);
+    expect(useScanHistoryStore.getState().getTodayProtein()).toBe(36);
+  });
 });

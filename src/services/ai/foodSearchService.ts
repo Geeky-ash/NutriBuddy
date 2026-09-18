@@ -14,14 +14,34 @@ export interface FoodSearchItem {
   novaGroup: 1 | 2 | 3 | 4;
   tags: string[];
   isAiGenerated?: boolean;
+  baseWeightGrams?: number;
+  baseServingUnit?: string;
+  baselineTag?: string;
 }
 
 /**
  * Curated nutrition database with extensive coverage of Indian regional dishes
- * and healthy whole foods.
+ * and healthy whole foods normalized per standard 100g / 1 serving base.
  */
 export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
   // Indian Regional Classics
+  {
+    id: 'food-moong-dal-chila',
+    name: 'Moong Dal Chila (Savory Yellow Lentil Crepe)',
+    category: 'Indian Classics',
+    servingSize: '1 piece (100g)',
+    calories: 240,
+    protein: 12.0,
+    carbs: 32.0,
+    fat: 6.0,
+    healthScore: 92,
+    grade: 'A',
+    novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
+    tags: ['moong dal chila', 'chila', 'cheela', 'moong dal', 'pancake', 'breakfast', 'indian', 'protein'],
+  },
   {
     id: 'food-poha',
     name: 'Poha (Flattened Rice with Mustard & Peanuts)',
@@ -34,6 +54,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 88,
     grade: 'A',
     novaGroup: 2,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['poha', 'breakfast', 'indian', 'rice', 'peanuts', 'flattened rice'],
   },
   {
@@ -48,6 +71,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 85,
     grade: 'A',
     novaGroup: 2,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['upma', 'suji', 'rava', 'breakfast', 'indian', 'semolina'],
   },
   {
@@ -62,6 +88,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 87,
     grade: 'A',
     novaGroup: 2,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['dosa', 'masala dosa', 'south indian', 'fermented', 'crispy'],
   },
   {
@@ -76,6 +105,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 94,
     grade: 'A',
     novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['idli', 'steamed', 'south indian', 'fermented', 'low fat'],
   },
   {
@@ -90,6 +122,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 92,
     grade: 'A',
     novaGroup: 2,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['dal', 'dal tadka', 'toor dal', 'yellow lentil', 'curry'],
   },
   {
@@ -104,6 +139,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 78,
     grade: 'B',
     novaGroup: 2,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['biryani', 'veg biryani', 'chicken biryani', 'rice', 'spiced'],
   },
   {
@@ -118,6 +156,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 92,
     grade: 'A',
     novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['chapati', 'roti', 'phulka', 'wheat', 'flatbread', 'bread'],
   },
   {
@@ -132,6 +173,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 86,
     grade: 'A',
     novaGroup: 2,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['paneer', 'paneer tikka', 'tandoori', 'cottage cheese', 'protein'],
   },
   {
@@ -146,6 +190,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 89,
     grade: 'A',
     novaGroup: 2,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['palak paneer', 'spinach', 'paneer', 'iron rich'],
   },
   {
@@ -160,6 +207,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 90,
     grade: 'A',
     novaGroup: 2,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['rajma', 'kidney beans', 'beans', 'fiber', 'dal'],
   },
   {
@@ -174,6 +224,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 95,
     grade: 'A',
     novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['khichdi', 'moong dal', 'comfort food', 'wholesome'],
   },
 
@@ -190,6 +243,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 96,
     grade: 'A',
     novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['egg', 'eggs', 'boiled egg', 'protein', 'keto'],
   },
   {
@@ -204,6 +260,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 95,
     grade: 'A',
     novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['chicken', 'chicken breast', 'grilled chicken', 'lean protein'],
   },
   {
@@ -218,6 +277,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 94,
     grade: 'A',
     novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['yogurt', 'greek yogurt', 'probiotic', 'dairy', 'curd', 'dahi'],
   },
   {
@@ -232,6 +294,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 93,
     grade: 'A',
     novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['oats', 'oatmeal', 'porridge', 'berries', 'fiber'],
   },
   {
@@ -246,6 +311,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 91,
     grade: 'A',
     novaGroup: 2,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['avocado', 'toast', 'sourdough', 'healthy fats'],
   },
   {
@@ -260,6 +328,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 93,
     grade: 'A',
     novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['quinoa', 'salad', 'mediterranean', 'live food', 'bowl'],
   },
   {
@@ -274,6 +345,9 @@ export const CURATED_FOOD_DATABASE: FoodSearchItem[] = [
     healthScore: 94,
     grade: 'A',
     novaGroup: 1,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: ['nuts', 'almonds', 'walnuts', 'snack', 'healthy fats'],
   },
 ];
@@ -371,7 +445,7 @@ export async function estimateFoodNutritionWithAi(
     id: `ai-${Date.now()}`,
     name: cleanName.charAt(0).toUpperCase() + cleanName.slice(1),
     category: 'Global Staples',
-    servingSize: '1 standard serving (~180g)',
+    servingSize: '1 standard serving (100g)',
     calories: defaultCals,
     protein: defaultProtein,
     carbs: defaultCarbs,
@@ -379,16 +453,19 @@ export async function estimateFoodNutritionWithAi(
     healthScore: defaultScore,
     grade: defaultGrade,
     novaGroup: defaultNova,
+    baseWeightGrams: 100,
+    baseServingUnit: '100g',
+    baselineTag: 'Base: 100g (or 1 serving)',
     tags: [lower],
     isAiGenerated: true,
   };
 
   const prompt = `You are NutriBuddy Nutrition Engine.
-Estimate the realistic average nutritional values for 1 standard serving of "${cleanName}".
+Estimate the realistic average nutritional values for 1 standard serving (normalized to 100g baseline) of "${cleanName}".
 Return STRICT JSON only matching this schema:
 {
   "name": "${cleanName}",
-  "servingSize": "1 standard serving (approx 150-200g)",
+  "servingSize": "100g (standard serving)",
   "calories": number,
   "protein": number,
   "carbs": number,
@@ -410,7 +487,7 @@ Do not include markdown fences or any other text.`;
         id: `ai-${Date.now()}`,
         name: aiResponse.name || cleanName,
         category: 'Global Staples',
-        servingSize: aiResponse.servingSize || '1 standard serving',
+        servingSize: aiResponse.servingSize || '100g (standard serving)',
         calories: Math.round(aiResponse.calories),
         protein: Math.round((aiResponse.protein || 0) * 10) / 10,
         carbs: Math.round((aiResponse.carbs || 0) * 10) / 10,
@@ -418,6 +495,9 @@ Do not include markdown fences or any other text.`;
         healthScore: Math.min(100, Math.max(10, Math.round(aiResponse.healthScore || defaultScore))),
         grade: aiResponse.grade || defaultGrade,
         novaGroup: aiResponse.novaGroup || defaultNova,
+        baseWeightGrams: 100,
+        baseServingUnit: '100g',
+        baselineTag: 'Base: 100g (or 1 serving)',
         tags: [lower],
         isAiGenerated: true,
       };
@@ -427,4 +507,25 @@ Do not include markdown fences or any other text.`;
   }
 
   return fallbackItem;
+}
+
+/**
+ * Extracts or returns the standardized base gram weight for a food item.
+ */
+export function getBaseWeight(item: FoodSearchItem): number {
+  if (item.baseWeightGrams && item.baseWeightGrams > 0) {
+    return item.baseWeightGrams;
+  }
+  const match = item.servingSize.match(/(\d+)\s*g/i);
+  if (match && match[1]) {
+    return parseInt(match[1], 10) || 100;
+  }
+  return 100;
+}
+
+/**
+ * Returns the standardized baseline tag text for display above macros.
+ */
+export function getBaselineTag(item: FoodSearchItem): string {
+  return item.baselineTag || 'Base: 100g (or 1 serving)';
 }

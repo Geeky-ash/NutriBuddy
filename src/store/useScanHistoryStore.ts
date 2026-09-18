@@ -46,6 +46,7 @@ interface ScanHistoryState {
   // Actions
   fetchScans: () => Promise<void>;
   addEntry: (entry: HistoryEntry) => void;
+  addScanLog: (entry: HistoryEntry) => void;
   removeEntry: (id: string) => void;
   deleteScanLog: (id: string) => Promise<void>;
   clearHistory: () => void;
@@ -170,6 +171,10 @@ export const useScanHistoryStore = create<ScanHistoryState>((set, get) => ({
     syncScanToSupabase(record, currentUserId || undefined).catch((err) =>
       console.warn('[ScanHistoryStore] Supabase background sync notice:', err)
     );
+  },
+
+  addScanLog: (entry) => {
+    get().addEntry(entry);
   },
 
   removeEntry: (id) => {

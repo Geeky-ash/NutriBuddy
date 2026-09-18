@@ -130,6 +130,20 @@ export async function initDatabase(): Promise<void> {
             image_uri TEXT,
             created_at TEXT NOT NULL
           );
+          CREATE TABLE IF NOT EXISTS profiles (
+            id TEXT PRIMARY KEY NOT NULL,
+            full_name TEXT,
+            gender TEXT,
+            height_cm REAL,
+            weight_kg REAL,
+            birth_date TEXT,
+            avatar_url TEXT,
+            daily_calories REAL DEFAULT 2100,
+            protein_g REAL DEFAULT 130,
+            carbs_g REAL DEFAULT 220,
+            fat_g REAL DEFAULT 65,
+            updated_at TEXT NOT NULL
+          );
           CREATE TABLE IF NOT EXISTS user_profiles (
             id TEXT PRIMARY KEY NOT NULL,
             full_name TEXT,
@@ -391,6 +405,19 @@ export async function saveUserProfileLocal(profile: UserProfileRecord): Promise<
     try {
       await db.runAsync(
         `INSERT OR REPLACE INTO user_profiles (
+          id, full_name, gender, height_cm, weight_kg, birth_date, avatar_url, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+        profile.id,
+        profile.full_name,
+        profile.gender,
+        profile.height_cm,
+        profile.weight_kg,
+        profile.birth_date,
+        profile.avatar_url,
+        profile.updated_at
+      );
+      await db.runAsync(
+        `INSERT OR REPLACE INTO profiles (
           id, full_name, gender, height_cm, weight_kg, birth_date, avatar_url, updated_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
         profile.id,

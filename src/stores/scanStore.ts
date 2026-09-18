@@ -45,3 +45,12 @@ export async function saveAndSyncScan(record: ScanRecord, userId?: string): Prom
 export async function deleteScanLog(id: string): Promise<void> {
   await useScanHistoryStore.getState().deleteScanLog(id);
 }
+
+/**
+ * Adds a meal scan entry:
+ * Performs local SQLite transaction first, followed by background Supabase cloud sync.
+ */
+export function addScanLog(entry: HistoryEntry): void {
+  useScanHistoryStore.getState().addScanLog(entry);
+}
+

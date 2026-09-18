@@ -437,15 +437,25 @@ export default function HistoryScreen() {
           activeOpacity={0.88}
         >
           <View style={styles.summaryHeader}>
-            <View>
+            <View style={styles.summaryHeaderLeft}>
               <View style={styles.titleRowWithChevron}>
-                <Text style={styles.selectedDateBadge}>
+                <Text
+                  style={styles.selectedDateBadge}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
                   {formatSelectedDateTitle(selectedDate)}
                 </Text>
-                <Text style={styles.nutritionInfoLabel}>· Nutrition Info</Text>
-                <ChevronRight size={15} color={colors.brand.primary} strokeWidth={2.5} />
+                <Text
+                  style={styles.nutritionInfoLabel}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  · Nutrition Info
+                </Text>
+                <ChevronRight size={15} color={colors.brand.primary} strokeWidth={2.5} style={styles.chevronIcon} />
               </View>
-              <Text style={styles.summarySubtext}>
+              <Text style={styles.summarySubtext} numberOfLines={1} ellipsizeMode="tail">
                 {dailySummary.count === 0
                   ? 'No meals logged yet'
                   : `${dailySummary.count} ${dailySummary.count === 1 ? 'meal' : 'meals'} logged`}
@@ -455,7 +465,7 @@ export default function HistoryScreen() {
             {dailySummary.count > 0 && (
               <View style={styles.scoreBadgeMini}>
                 <Activity size={13} color={colors.brand.primaryDark} />
-                <Text style={styles.scoreBadgeMiniText}>
+                <Text style={styles.scoreBadgeMiniText} numberOfLines={1}>
                   Avg {dailySummary.averageScore}/100
                 </Text>
               </View>
@@ -995,20 +1005,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.md,
   },
+  summaryHeaderLeft: {
+    flex: 1,
+    marginRight: 8,
+    minWidth: 0,
+  },
   titleRowWithChevron: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    flexShrink: 1,
   },
   selectedDateBadge: {
     fontSize: 20,
     fontWeight: '700',
     color: '#0F172A',
+    flexShrink: 1,
   },
   nutritionInfoLabel: {
     fontSize: 13,
     fontWeight: '700',
     color: colors.brand.primaryDark,
+    flexShrink: 1,
+  },
+  chevronIcon: {
+    flexShrink: 0,
   },
   summarySubtext: {
     fontSize: 13,
@@ -1024,6 +1045,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: radii.full,
     gap: 4,
+    flexShrink: 0,
   },
   scoreBadgeMiniText: {
     color: colors.brand.primaryDark,
