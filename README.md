@@ -89,3 +89,37 @@ CREATE POLICY "Users can manage own profile"
     ON public.profiles FOR ALL
     USING (auth.uid() = id)
     WITH CHECK (auth.uid() = id);
+
+```
+🚀 Getting Started
+Prerequisites
+Node.js (v18+ recommended)
+
+Android Studio & Android Emulator / Physical Device
+
+Expo CLI (npm install -g expo-cli)
+
+EAS CLI (npm install -g eas-cli)
+
+Environment Setup
+Create a .env file in the root directory and populate your keys:
+EXPO_PUBLIC_SUPABASE_URL=[https://your-project-ref.supabase.co](https://your-project-ref.supabase.co)
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+EXPO_PUBLIC_GEMINI_API_KEY=your-gemini-vision-api-key
+
+
+
+Installation
+Clone the Repository:
+
+Bash
+git clone [https://github.com/your-username/nutribuddy.git](https://github.com/your-username/nutribuddy.git)
+cd nutribuddy
+Install Dependencies:
+
+Bash
+npm install
+Start Development Server:
+
+Bash
+npx expo start
