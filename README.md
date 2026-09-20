@@ -8,8 +8,18 @@
 [![Gemini AI](https://img.shields.io/badge/Gemini_Vision_API-AI_Scanner-8E75B2?style=flat&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
 
 [<img src="https://img.shields.io/badge/DOWNLOAD_APK-v1.0.1-22C55E?style=for-the-badge&logo=android&logoColor=white" height="36" />](https://github.com/Geeky-ash/NutriBuddy/releases/download/v1.0.1/NutriBuddy-v1.0.1.apk)
+
 **NutriBuddy** is a production-grade, offline-first React Native mobile application designed to simplify daily meal logging, macro tracking, and nutritional awareness. Powered by **Gemini Vision API** for instant meal recognition, **Supabase** for secure authentication and real-time cloud sync, and **Expo SQLite** for local persistence, NutriBuddy ensures accurate nutrition logging whether you're online or offline.
 
+---
+
+## 📱 App Screenshots
+
+<div align="center">
+  <img src="assets/images/scanner.jpg" width="30%" alt="AI Scanner" />
+  <img src="assets/images/history.jpg" width="30%" alt="Nutrition Diary" />
+  <img src="assets/images/profile.jpg" width="30%" alt="User Profile" />
+</div>
 
 ---
 
@@ -91,37 +101,3 @@ CREATE POLICY "Users can manage own profile"
     ON public.profiles FOR ALL
     USING (auth.uid() = id)
     WITH CHECK (auth.uid() = id);
-
-```
-🚀 Getting Started
-Prerequisites
-Node.js (v18+ recommended)
-
-Android Studio & Android Emulator / Physical Device
-
-Expo CLI (npm install -g expo-cli)
-
-EAS CLI (npm install -g eas-cli)
-
-Environment Setup
-Create a .env file in the root directory and populate your keys:
-EXPO_PUBLIC_SUPABASE_URL=[https://your-project-ref.supabase.co](https://your-project-ref.supabase.co)
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-EXPO_PUBLIC_GEMINI_API_KEY=your-gemini-vision-api-key
-
-
-
-Installation
-Clone the Repository:
-
-Bash
-git clone [https://github.com/your-username/nutribuddy.git](https://github.com/your-username/nutribuddy.git)
-cd nutribuddy
-Install Dependencies:
-
-Bash
-npm install
-Start Development Server:
-
-Bash
-npx expo start
