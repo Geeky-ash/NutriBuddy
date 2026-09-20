@@ -6,7 +6,8 @@
 [![Supabase](https://img.shields.io/badge/Supabase-Database_%26_Auth-3FCF8E?style=flat&logo=supabase&logoColor=white)](https://supabase.com/)
 [![SQLite](https://img.shields.io/badge/SQLite-Local_Storage-003B57?style=flat&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 [![Gemini AI](https://img.shields.io/badge/Gemini_Vision_API-AI_Scanner-8E75B2?style=flat&logo=googlegemini&logoColor=white)](https://ai.google.dev/)
-[<img src="https://img.shields.io/badge/DOWNLOAD_APK-v1.0.0-22C55E?style=for-the-badge&logo=android&logoColor=white" height="36" />](https://github.com/Geeky-ash/NutriBuddy/releases/download/v1.0.0/NutriBuddy-v1.0.0.apk)
+
+[<img src="https://img.shields.io/badge/DOWNLOAD_APK-v1.0.1-22C55E?style=for-the-badge&logo=android&logoColor=white" height="36" />](https://github.com/Geeky-ash/NutriBuddy/releases/download/v1.0.1/NutriBuddy-v1.0.1.apk)
 **NutriBuddy** is a production-grade, offline-first React Native mobile application designed to simplify daily meal logging, macro tracking, and nutritional awareness. Powered by **Gemini Vision API** for instant meal recognition, **Supabase** for secure authentication and real-time cloud sync, and **Expo SQLite** for local persistence, NutriBuddy ensures accurate nutrition logging whether you're online or offline.
 
 
