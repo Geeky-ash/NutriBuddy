@@ -4,7 +4,7 @@
     "slug": "nutribuddy",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/images/icon.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "nutribuddy",
     "userInterfaceStyle": "light",
     "splash": {
@@ -21,14 +21,17 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./src/assets/images/adaptive-icon.png",
-        "backgroundColor": "#FAFAF7"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#E2E8F0"
       },
       "package": "com.nutribuddy.app",
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
