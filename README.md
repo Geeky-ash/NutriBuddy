@@ -16,9 +16,9 @@
 ## 📱 App Screenshots
 
 <div align="center">
-  <img src="assets/images/scanner.jpg" width="30%" alt="AI Scanner" />
-  <img src="assets/images/history.jpg" width="30%" alt="Nutrition Diary" />
-  <img src="assets/images/profile.jpg" width="30%" alt="User Profile" />
+  <img src="https://raw.githubusercontent.com/Geeky-ash/NutriBuddy/main/assets/images/scanner.jpeg" width="30%" alt="AI Scanner" />
+  <img src="https://raw.githubusercontent.com/Geeky-ash/NutriBuddy/main/assets/images/history.jpeg" width="30%" alt="Nutrition Diary" />
+  <img src="https://raw.githubusercontent.com/Geeky-ash/NutriBuddy/main/assets/images/profile.jpeg" width="30%" alt="User Profile" />
 </div>
 
 ---
